@@ -241,7 +241,7 @@ A[通过CLSID获取IClassFactory: IUnknown->QueryInterface] --> |步骤1|B[通�
     F --> |步骤3|D
 ```
 
-&emsp;&emsp;不过在实际使用中，并不会直接使用IUnknown接口类的函数，因为极易因为程序员的疏忽忘记释放一个接口或者多释放一个接口导致错误，因此使用图中函数CoCreateInstance就能直接创建一个类的接口。也就是说一个函数替代了封装了IUnknown类和IClassFactory类的功能，能够简化流程。
+&emsp;&emsp;不过在实际使用中，并不会直接使用IUnknown接口类的函数，因为极易因为程序员的疏忽忘记释放一个接口或者多释放一个接口导致错误，因此使用图中函数CoCreateInstance就能直接创建一个类的接口。也就是说一个函数封装了IUnknown类和IClassFactory类的功能，能够简化流程。
 
 &emsp;&emsp;下面是创建WScript.Shell对象，使用Run方法起powershell的完整代码：
 
@@ -370,3 +370,4 @@ End Sub
 ![ExecuteExcel4Macro-calc](https://joeyzzzzzz.github.io/Picture/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/ExecuteExcel4Macro-calc.png)
 
 &emsp;&emsp;这里给大家提供这种思路，通过这种方式还能挖掘到更多的利用方式。感谢阅读，文中若有不妥之处，还请各位师傅多多指正！
+
