@@ -12,7 +12,7 @@
 
 ![Wscript.Shell对象](https://joeyzzzzzz.github.io/Picture/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/Wscript.Shell%E5%AF%B9%E8%B1%A1.png)
 
-&emsp;&emsp;其中`{72C24DD5-D70A-438B-8A42-98424B88AFB8}`就是该对象的CLSID。如果将COM对象比作人的话，CLSID就相当于身份证号，每个COM对象的CLSID都是唯一且不重复的。当然，人如果只有身份证号的话，日常生活就会很不方便，于是每个人都有自己的名字。那么COM对象中的ProgID就相当于它的名字，图中的COM对象ProgID为WScript.Shell.1：
+&emsp;&emsp;其中`{72C24DD5-D70A-438B-8A42-98424B88AFB8}`就是该对象的CLSID。如果将COM对象比作人的话，CLSID就相当于身份证号，每个COM对象的CLSID都是唯一且不重复的。当然，如果只有身份证号，会有很多不方便的情况，于是便有自己的名字。那么COM对象中的ProgID就相当于它的名字，图中的COM对象ProgID为WScript.Shell.1：
 
 ![ProgID](https://joeyzzzzzz.github.io/Picture/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/ProgID.png)
 
@@ -40,7 +40,7 @@ Shell.Run "cmd /c calc.exe"
 
 ![VBS](https://joeyzzzzzz.github.io/Picture/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/%E8%BF%90%E8%A1%8CVBS.png)
 
-&emsp;&emsp;`CreateObject`方法使用COM对象的ProgID：Wscript.Shell来创建对象，创建完成后便能调用该对象的Run方法通过cmd起calc。除了 使用ProgID，还可以使用Wscript.Shell对象的CLSID来创建：
+&emsp;&emsp;`CreateObject`方法使用COM对象的ProgID：Wscript.Shell来创建对象，创建完成后便能调用该对象的Run方法通过cmd起calc。除了使用ProgID，还可以使用Wscript.Shell对象的CLSID来创建：
 
 ```vbscript
 Dim Shell
@@ -238,7 +238,7 @@ A[通过CLSID获取IClassFactory: IUnknown->QueryInterface] --> |步骤1|B[通�
     D --> |步骤4|E[释放COM对象: IUnknown->Release]
     A --> |合并|F[CoCreateInstance]
     B --> |合并|F
-    F --> |步骤3|D
+    F --> |步骤2|C
 ```
 
 &emsp;&emsp;不过在实际使用中，并不会直接使用IUnknown接口类的函数，因为极易因为程序员的疏忽忘记释放一个接口或者多释放一个接口导致错误，因此使用图中函数CoCreateInstance就能直接创建一个类的接口。也就是说一个函数封装了IUnknown类和IClassFactory类的功能，能够简化流程。
@@ -309,7 +309,7 @@ int main(int argc, char** argv)
 
 &emsp;&emsp;步骤一、二都是用来初始化调用COM对象，步骤三使用了CoCreateInstance创建了WScript.Shell对象的IDispatch类接口，使用GetIDsOfNames函数获得了Run函数的ID。步骤四通过函数ID使用Invoke函数执行了Run方法起calc，最终运行的效果和IE的EXP一致，这里就不再展示了。
 
-&emsp;&emsp;那么，如此复杂的方式相比VBS有什么好处呢？那就是可以将C++代码通过shellcode生成框架，生成后的shellcode比VBS能用在更多的地方，更加灵活，至于如何将代码转换成shellcode本文就不再讲述了。
+&emsp;&emsp;那么，如此复杂的方式相比VBS有什么好处呢？那就是可以将C++代码通过shellcode生成框架转化为shellcode，生成后的shellcode比VBS能用在更多的地方，更加灵活，至于如何将代码转换成shellcode本文就不再讲述了。
 
 ### 通过powershell创建COM对象
 
@@ -395,5 +395,5 @@ End Sub
 
 ## 结论
 
-&emsp;&emsp;COM对象功能强大，灵活便捷，可以用于浏览器、脚本、Office宏和shellcode。通过powershell遍历系统中的COM对象，结合逆向分析更有可能发现未公开的利用方式。
+&emsp;&emsp;COM对象功能强大，灵活便捷，可以用于浏览器、脚本、Office宏、shellcode和powershell。通过powershell遍历系统中的COM对象，结合逆向分析更有可能发现未公开的利用方式。
 
