@@ -323,6 +323,8 @@ int main(int argc, char** argv)
 
 &emsp;&emsp;这部分的内容参考了FIREEYE的研究进行，利用powershell脚本遍历COM对象的方式成功挖掘到一种利用方式，故此分享。
 
+### 已公开COM对象利用挖掘
+
 &emsp;&emsp;首先需要便利系统中所有COM对象的CLSID，于是编写powershell脚本，将CLSID输出到txt文本中：
 
 ```powershell
@@ -369,5 +371,29 @@ End Sub
 
 ![ExecuteExcel4Macro-calc](https://joeyzzzzzz.github.io/Picture/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/ExecuteExcel4Macro-calc.png)
 
-&emsp;&emsp;这里给大家提供这种思路，通过这种方式还能挖掘到更多的利用方式。感谢阅读，文中若有不妥之处，还请各位师傅多多指正！
+### 未公开COM对象利用挖掘
+
+&emsp;&emsp;对于已经公开的COM对象挖掘较为容易，当面对未公开的COM对象时，就需要通过逆向挖掘利用。比如位于`C:\windows\system32\wat\watweb.dll`中的WatWeb.WatWebObject对象公开了一个名为LaunchSystemApplication的方法，在oleview中能看到需要3个参数：
+
+![oleview](https://joeyzzzzzz.github.io/Picture/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/oleview.png)
+
+&emsp;&emsp;但仅凭这些信息无法确定该方法是否能起任意进程，于是逆向查看LaunchSystemApplication，由于有调试符号，因此可以直接定位到该方法：
+
+![LaunchSystemApplication](https://joeyzzzzzz.github.io/Picture/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/LaunchSystemApplication.png)
+
+&emsp;&emsp;LaunchSystemApplication调用LaunchSystemApplicationInternal，进入查看发现调用了CreateProcess，有利用的可能：
+
+![LaunchSystemApplicationInternal](https://joeyzzzzzz.github.io/Picture/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/LaunchSystemApplicationInternal.png)
+
+&emsp;&emsp;但是可以看到调用了IsApprovedApplication方法进行校验，进入查看：
+
+![IsApprovedApplication](https://joeyzzzzzz.github.io/Picture/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/IsApprovedApplication.png)
+
+![ExeName](https://joeyzzzzzz.github.io/Picture/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/ExeName.png)
+
+&emsp;&emsp;发现需要校验传入的字符串为slui.exe，同时会将该字符串附加到系统路径下，因此并不能随意执行进程。尽管最终没有利用成功，但是这种思路可以帮助分析其他未知的COM对象，挖掘到更多的利用方式。
+
+## 结论
+
+&emsp;&emsp;COM对象功能强大，灵活便捷，可以用于浏览器、脚本、Office宏和shellcode。通过powershell遍历系统中的COM对象，结合逆向分析更有可能发现未公开的利用方式。
 
