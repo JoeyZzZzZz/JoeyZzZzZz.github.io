@@ -1,1 +1,23 @@
+title: Joey's Blog
+
+author:
+  name: "Joey"
+  email: "no"
+  url: "https://joeyzzzzzz.github.io/"
+
+baseurl: /
+
+source: .
+destination: ./_site
+permalink: /:title
+paginate: 10
+paginate_path: /page/:num/
+
+defaults:
+  -
+    scope:
+      path: ""
+      type: "posts"
+    values:
+      layout: "post"
 theme: jekyll-theme-slate
