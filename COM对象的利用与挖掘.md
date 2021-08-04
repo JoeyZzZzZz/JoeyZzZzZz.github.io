@@ -12,7 +12,7 @@ COM(微软组件对象模型)，是一种独立于平台的分布式系统，用
 
 ![Wscript.Shell对象](https://gitee.com/tianxuan-securitylab/source/raw/master/img/Wscript.Shell对象.png)
 
-其中`{72C24DD5-D70A-438B-8A42-98424B88AFB8}`就是该对象的CLSID。如果将COM对象比作人的话，CLSID就相当于身份证号，每个COM对象的CLSID都是唯一且不重复的。当然，如果只有身份证号，会有很多不方便的情况，于是便有自己的名字。那么COM对象中的ProgID就相当于它的名字，图中的COM对象ProgID为WScript.Shell.1：
+其中`{72C24DD5-D70A-438B-8A42-98424B88AFB8}`就是该对象的CLSID。如果将COM对象比作人的话，CLSID就相当于身份证号，每个COM对象的CLSID都是唯一且不重复的。当然，如果只有身份证号，会有很多不方便的情况，于是便有自己的名字。COM对象中的ProgID就相当于它的名字，图中的COM对象ProgID为WScript.Shell.1：
 
 ![ProgID](https://gitee.com/tianxuan-securitylab/source/raw/master/img/ProgID.png)
 
