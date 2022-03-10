@@ -5,7 +5,7 @@ author:
   email: "no"
   url: "https://joeyzzzzzz.github.io/"
 
-baseurl: /
+baseurl: https://joeyzzzzzz.github.io/
 
 source: .
 destination: ./_site
