@@ -1,6 +1,6 @@
 ## 欢迎来到Joey的园子
 
-主要分享：二进制漏洞分析、挖掘和利用
+逆向就像拼图，而我乐在其中
 
 ### 目录
 
@@ -9,6 +9,14 @@
 [CVE-2017-11826 漏洞分析及利用](https://joeyzzzzzz.github.io/CVE-2017-11826)  
 
 2021.08.04
+
+[CVE-2017-0261 EPS文件解析漏洞分析](https://joeyzzzzzz.github.io/CVE-2017-0261)  
+
+2021.09.07
+
+[CVE-2015-2545 EMET Bypass分析](https://joeyzzzzzz.github.io/CVE-2015-2545)  
+
+2021.11.19
 
 #### 漏洞利用
 
