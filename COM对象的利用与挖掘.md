@@ -1,4 +1,4 @@
-﻿# COM对象的利用与挖掘
+# COM对象的利用与挖掘
 
 ## 前言
 
@@ -10,15 +10,15 @@ COM(微软组件对象模型)，是一种独立于平台的分布式系统，用
 
 注册表项：`HKEY_LOCAL_MACHINE\SOFTWARE\Classes\CLSID`下，包含COM对象的所有公开的信息，图中显示了Wscript.Shell对象在注册表中的信息：
 
-![Wscript.Shell对象](https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/Picture/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/Wscript.Shell对象.png)
+![Wscript.Shell对象](https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/Wscript.Shell对象.png)
 
 其中`{72C24DD5-D70A-438B-8A42-98424B88AFB8}`就是该对象的CLSID。如果将COM对象比作人的话，CLSID就相当于身份证号，每个COM对象的CLSID都是唯一且不重复的。当然，如果只有身份证号，会有很多不方便的情况，于是便有自己的名字。COM对象中的ProgID就相当于它的名字，图中的COM对象ProgID为WScript.Shell.1：
 
-![ProgID](https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/Picture/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/ProgID.png)
+![ProgID](https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/ProgID.png)
 
 而InProcServer32表示该COM对象位于哪个PE文件中，图中表示WScript.Shell对象位于`C:\Windows\System32\wshom.ocx`中：
 
-![InProcServer32](https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/Picture/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/InProcServer32.png)
+![InProcServer32](https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/InProcServer32.png)
 
 有了上述的信息后，接下来便可以通过这些信息去使用COM对象了。
 
@@ -38,7 +38,7 @@ Shell.Run "cmd /c calc.exe"
 
 运行效果如图：
 
-![运行VBS](https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/Picture/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/运行VBS.png)
+![运行VBS](https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/运行VBS.png)
 
 `CreateObject`方法使用COM对象的ProgID：Wscript.Shell来创建对象，创建完成后便能调用该对象的Run方法通过cmd起calc。除了使用ProgID，还可以使用Wscript.Shell对象的CLSID来创建：
 
@@ -69,7 +69,7 @@ Shell.Run "cmd /c calc.exe"
 
 最终实现效果：
 
-![改造EXP](https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/Picture/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/改造EXP.png)
+![改造EXP](https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/改造EXP.png)
 
 接下来讲述COM对象在Office宏中的利用，以Office2019为例，在word文档中创建如下宏代码：
 
@@ -83,11 +83,11 @@ End Sub
 
 打开文件后，会提示宏已被禁用：
 
-![宏安全提示](https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/Picture/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/宏安全提示.png)
+![宏安全提示](https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/宏安全提示.png)
 
 点击启用宏后，使用cmd起计算器：
 
-![word起calc](https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/Picture/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/word起calc.png)
+![word起calc](https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/word起calc.png)
 
 用法和IE中一致，就不再赘述了。
 
@@ -101,7 +101,7 @@ IClassFactory的作用是创建COM组件，通过类中CreateInstance函数即�
 
 IDispatch叫做调度接口，IDispatch类中的GetIDsOfNames函数可以通过IClassFactory创建的COM对象的函数名获取对应的函数ID（IID），通过这个ID就可以使用IDispatch类中的Invoke函数来执行COM对象中方法。最后将相关的资源使用IUnknown->Release函数释放，即可完成一次完整的COM对象调用过程。图中所示就是具体的实现流程：
 
-![word起calc](https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/Picture/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/image-20210630154827820.png)
+![word起calc](https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/image-20210630154827820.png)
 
 不过在实际使用中，并不会直接使用IUnknown接口类的函数，因为极易因为程序员的疏忽忘记释放一个接口或者多释放一个接口导致错误，因此使用图中函数CoCreateInstance就能直接创建一个类的接口。也就是说一个函数封装了IUnknown类和IClassFactory类的功能，能够简化流程。
 
@@ -177,7 +177,7 @@ int main(int argc, char** argv)
 
 接下来就是最后一种创建COM对象的方式：使用powershell创建COM对象。使用powershell一样可以分别通过ProgID和CLSID创建，通过```$shell = [Activator]::CreateInstance([type]::GetTypeFromProgID("WScript.Shell"))```命令即可通过ProgID创建WSH对象，而通过```$shell = [Activator]::CreateInstance([type]::GetTypeFromCLSID("72C24DD5-D70A-438B-8A42-98424B88AFB8"))```则可以通过CLSID创建，下图是通过CLSID创建后的效果：
 
-![powershell创建COM](https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/Picture/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/powershell创建COM.png)
+![powershell创建COM](https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/powershell创建COM.png)
 
 通过这种创建COM对象的方式，我们便可以编写powershell脚本进行COM对象的遍历了，获取计算机中大部分COM对象的方法和属性了。
 
@@ -196,7 +196,7 @@ Get-ChildItem -Path HKCR:\CLSID -Name | Select -Skip 1 > clsids.txt
 
 生成的clsid.txt如图所示：
 
-![clsid](https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/Picture/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/clsid.png)
+![clsid](https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/clsid.png)
 
 接着利用这些clsid通过powershell创建对应的COM对象，并且使用Get-Member方法获取对应的方法和属性，并最终输出到文本中，pwoershell脚本如下：
 
@@ -216,11 +216,11 @@ ForEach($CLSID in Get-Content $inputFilename) {
 
 脚本运行期间可能会打开各种软件，甚至会退出，需要截取clsid重新运行。运行后的文本内容为：
 
-![clsid-members](https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/Picture/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/clsid-members.png)
+![clsid-members](https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/clsid-members.png)
 
 通过搜索关键词：execute、exec、和run，能够发现不少可以利用的COM对象。本人由于在研究宏相关的COM利用，于是尝试了关键字ExecuteExcel4Macro，结果意外的收获到了COM对象Microsoft.Office.Interop.Excel.GlobalClass：
 
-![ExecuteExcel4Macro](https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/Picture/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/ExecuteExcel4Macro.png)
+![ExecuteExcel4Macro](https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/ExecuteExcel4Macro.png)
 
 于是使用ExecuteExcel4Macro函数加载shell32.dll中的ShellExecuteA成功起calc：
 
@@ -231,27 +231,27 @@ execl.ExecuteExcel4Macro ("CALL(""shell32"", ""ShellExecuteA"", ""JJJCJJH"", -1,
 End Sub
 ```
 
-![ExecuteExcel4Macro-calc](https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/Picture/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/ExecuteExcel4Macro-calc.png)
+![ExecuteExcel4Macro-calc](https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/ExecuteExcel4Macro-calc.png)
 
 ### 未公开COM对象利用挖掘
 
 对于已经公开的COM对象挖掘较为容易，当面对未公开的COM对象时，就需要通过逆向挖掘利用。比如位于`C:\windows\system32\wat\watweb.dll`中的WatWeb.WatWebObject对象公开了一个名为LaunchSystemApplication的方法，在oleview中能看到需要3个参数：
 
-![oleview](https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/Picture/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/oleview.png)
+![oleview](https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/oleview.png)
 
 但仅凭这些信息无法确定该方法是否能起任意进程，于是逆向查看LaunchSystemApplication，由于有调试符号，因此可以直接定位到该方法：
 
-![LaunchSystemApplication](https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/Picture/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/LaunchSystemApplication.png)
+![LaunchSystemApplication](https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/LaunchSystemApplication.png)
 
 LaunchSystemApplication调用LaunchSystemApplicationInternal，进入查看发现调用了CreateProcess，有利用的可能：
 
-![LaunchSystemApplicationInternal](https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/Picture/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/LaunchSystemApplicationInternal.png)
+![LaunchSystemApplicationInternal](https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/LaunchSystemApplicationInternal.png)
 
 但是可以看到调用了IsApprovedApplication方法进行校验，进入查看：
 
-![IsApprovedApplication](https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/Picture/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/IsApprovedApplication.png)
+![IsApprovedApplication](https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/IsApprovedApplication.png)
 
-![ExeName](https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/Picture/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/ExeName.png)
+![ExeName](https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/ExeName.png)
 
 发现需要校验传入的字符串为slui.exe，同时会将该字符串附加到系统路径下，因此并不能随意执行进程。尽管最终没有利用成功，但是这种思路可以帮助分析其他未知的COM对象，挖掘到更多的利用方式。
 
