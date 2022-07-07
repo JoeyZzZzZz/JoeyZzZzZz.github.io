@@ -1,0 +1,442 @@
+/* Reset Basic Elements ============================================== */
+body, h1, h2, h3, h4, h5, h6, p, blockquote, pre, hr, dl, dd, ol, ul, figure { margin: 0; padding: 0; }
+
+/* Basic Styling ============================================== */
+body { font-family: "Lato", Helvetica, Arial, sans-serif; font-size: 16px; line-height: 1.5; font-weight: 300; color: #454545; background-color: #fff !important; -webkit-text-size-adjust: 100%; }
+
+/* Set Margin Bottom for Vertical Rhythm ============================================== */
+h1, h2, h3, h4, h5, h6, p, blockquote, pre, ul, ol, dl, figure { margin-bottom: 15px; }
+
+/* Images and Figures ============================================== */
+img { max-width: 100%; vertical-align: middle; }
+
+figure > img { display: block; }
+
+figcaption { font-size: 14.32px; }
+
+/* Lists ============================================== */
+ul, ol { margin-left: 30px; }
+
+li > ul, li > ol { margin-bottom: 0; }
+
+/* Headers ============================================== */
+h1, h2, h3, h4, h5, h6 { font-family: "Quicksand", Heltvetica, sans-serif; text-align: center; font-weight: bold; }
+
+h1 { font-size: 1.9em !important; }
+
+h2 { font-size: 1.5em !important; }
+
+h3 { font-size: 1.3em; }
+
+h4 { font-size: 1em; }
+
+h5 { font-size: .9em; }
+
+h6 { font-size: .8em; }
+
+/* Links ============================================== */
+a { color: #4698cb; text-decoration: none; }
+
+a:hover { color: #5aa3d1; text-decoration: none; }
+
+/* Block Quotes ============================================== */
+blockquote { color: #BBB; border-left: 4px solid #5aa3d1; padding-left: 15px; font-size: 17px; letter-spacing: -1px; font-style: italic; }
+
+blockquote > :last-child { margin-bottom: 0; }
+
+/* Code Blocks ============================================== */
+pre, code { font-size: 13px; border: 1px solid #b5b5b5; font-family: Menlo, Monaco, "Andale Mono", serif; }
+
+code { padding: 1px 3px; background-color: #FFF; border-radius: 5px; }
+
+pre { border-radius: 3px; padding: 8px 12px; overflow-x: scroll; background-color: #F5F5F5; }
+
+pre > code { background-color: #F5F5F5; border: 0; padding-right: 0; padding-left: 0; }
+
+/* Wrapper ============================================== */
+.wrapper { max-width: -webkit-calc(800px - (30px * 2)); max-width: calc(800px - (30px * 2)); margin-right: auto; margin-left: auto; padding-right: 30px; padding-left: 30px; }
+
+@media screen and (max-width: 800px) { .wrapper { max-width: -webkit-calc(800px - (30px)); max-width: calc(800px - (30px)); padding-right: 15px; padding-left: 15px; } }
+
+/* Clear Fix ============================================== */
+.wrapper:after { content: ""; display: table; clear: both; }
+
+/* TABLES =============================================== */
+table { border-collapse: collapse; border-spacing: 0; }
+
+:not(.highlight) > table { margin: 0 auto 1.5em auto; }
+
+:not(.highlight) > table tr { background-color: #fff; border-top: 1px solid #ccc; }
+
+:not(.highlight) > table tr th, :not(.highlight) > table tr td { padding: 6px 13px; border: 1px solid #ddd; }
+
+:not(.highlight) > table tr th { font-weight: bold; }
+
+:not(.highlight) > table tr:nth-child(2n) { background-color: #f8f8f8; }
+
+/* Site Header ============================================== */
+.site-header { height: 55px; background-color: #F5F5F5; position: relative; width: 100%; }
+
+.logo-header { margin-top: -30px; margin-bottom: 30px; text-align: center; border-bottom: 1px solid #aacfe7; }
+
+.site-header a { color: #5aa3d1; }
+
+.site-nav { padding-top: 16px; text-align: center; text-transform: uppercase; margin-right: 16px; }
+
+.site-nav .menu-icon { display: none; }
+
+@media screen and (max-width: 800px) { .site-nav { position: absolute; top: 3px; right: 3px; background-color: #fff; border: 1px solid #b5b5b5; border-radius: 5px; text-align: center; } .site-nav .menu-icon { display: block; float: right; width: 50px; height: 30px; line-height: 0; text-align: center; } .site-nav .trigger { font-size: 0.9em; clear: both; display: none; } .site-nav:hover .trigger { display: block; padding-bottom: 5px; } .site-nav .page-link { display: block; padding: 5px 10px; text-align: center; margin-left: 20px; } }
+
+.site-nav .page-link { font-family: "Quicksand", Heltvetica, sans-serif; font-weight: 600 !important; line-height: 1.5; letter-spacing: 0.05em; margin-right: 20px; }
+
+.site-nav .page-link:hover { opacity: 0.8; }
+
+/* Site Footer ============================================== */
+.footer { padding-bottom: 3em; margin: auto; font-size: 12px; font-family: "Quicksand", Heltvetica, sans-serif; color: #959595; }
+
+.footer.center { text-align: center; }
+
+.footer.center > * { margin: 0 auto; }
+
+.footer img { display: block; width: 40px; height: 40px; border-radius: 100%; margin-bottom: 3px; }
+
+/* Individual Posts ============================================== */
+.page-content { padding: 30px 0; text-align: justify; }
+
+.page-heading { font-size: 20px; padding-top: 2px; }
+
+/* Archive ============================================== */
+.post-list { margin-left: 0; list-style: none; }
+
+.post-list > li { display: block; padding: 0.1em 1.5em; }
+
+.post-link { font-family: "Quicksand", Heltvetica, sans-serif; font-weight: 300; font-size: 1.5em; letter-spacing: -1px; color: #454545; width: 100%; }
+
+@media screen and (max-width: 800px) { .post-link { font-size: 1.0em; } }
+
+.post-date { font-family: "Quicksand", Heltvetica, sans-serif; font-weight: 300; font-size: 1.2em; letter-spacing: -1px; color: #828282; float: right; padding-top: 6px; }
+
+@media screen and (max-width: 800px) { .post-date { font-size: 0.8em; } }
+
+.post-meta { font-size: 14.32px; color: #b5b5b5; text-transform: uppercase; display: inline-block; }
+
+.post-tags { padding-left: 40px; }
+
+.post-tag { padding-bottom: 3em; margin: auto; font-size: 1em; color: #828282; font-family: "Quicksand", Heltvetica, sans-serif; }
+
+@media screen and (max-width: 800px) { .post-tag { font-size: 0.7em; } }
+
+/* Post Format ============================================== */
+.post-header { margin-bottom: 30px; text-align: center; border-bottom: 1px solid #aacfe7; }
+
+.post-title { font-size: 42px; letter-spacing: -1px; line-height: 1; }
+
+.post-content { margin-bottom: 30px; }
+
+.post-paging a { opacity: 0.4; }
+
+.post-paging a:hover { opacity: 0.8; }
+
+.post-paging .left, .post-paging .right { position: fixed; top: 50%; left: 50%; }
+
+.post-paging .left { margin-left: -440px; }
+
+.post-paging .right { margin-left: 410px; }
+
+.post-up a { opacity: 0.4; }
+
+.post-up a:hover { opacity: 0.8; }
+
+.highlight { font-size: 14px; }
+
+article > div.highlight pre { padding: 5px 7px; margin: 10px 0; border: 1px solid #eee; overflow: auto; }
+
+pre code { line-height: 1.5; }
+
+.hll { background-color: #ffffcc; }
+
+.c { color: #999988; font-style: italic; }
+
+/* Comment */
+.err { color: #a61717; background-color: #e3d2d2; }
+
+/* Error */
+.k { color: #000000; font-weight: bold; }
+
+/* Keyword */
+.o { color: #000000; font-weight: bold; }
+
+/* Operator */
+.cm { color: #999988; font-style: italic; }
+
+/* Comment.Multiline */
+.cp { color: #999999; font-weight: bold; font-style: italic; }
+
+/* Comment.Preproc */
+.c1 { color: #999988; font-style: italic; }
+
+/* Comment.Single */
+.cs { color: #999999; font-weight: bold; font-style: italic; }
+
+/* Comment.Special */
+.gd { color: #000000; background-color: #ffdddd; }
+
+/* Generic.Deleted */
+.ge { color: #000000; font-style: italic; }
+
+/* Generic.Emph */
+.gr { color: #aa0000; }
+
+/* Generic.Error */
+.gh { color: #999999; }
+
+/* Generic.Heading */
+.gi { color: #000000; background-color: #ddffdd; }
+
+/* Generic.Inserted */
+.go { color: #888888; }
+
+/* Generic.Output */
+.gp { color: #555555; }
+
+/* Generic.Prompt */
+.gs { font-weight: bold; }
+
+/* Generic.Strong */
+.gu { color: #aaaaaa; }
+
+/* Generic.Subheading */
+.gt { color: #aa0000; }
+
+/* Generic.Traceback */
+.kc { color: #000000; font-weight: bold; }
+
+/* Keyword.Constant */
+.kd { color: #000000; font-weight: bold; }
+
+/* Keyword.Declaration */
+.kn { color: #000000; font-weight: bold; }
+
+/* Keyword.Namespace */
+.kp { color: #000000; font-weight: bold; }
+
+/* Keyword.Pseudo */
+.kr { color: #000000; font-weight: bold; }
+
+/* Keyword.Reserved */
+.kt { color: #445588; font-weight: bold; }
+
+/* Keyword.Type */
+.m { color: #009999; }
+
+/* Literal.Number */
+.s { color: #d01040; }
+
+/* Literal.String */
+.na { color: #008080; }
+
+/* Name.Attribute */
+.nb { color: #0086B3; }
+
+/* Name.Builtin */
+.nc { color: #445588; font-weight: bold; }
+
+/* Name.Class */
+.no { color: #008080; }
+
+/* Name.Constant */
+.nd { color: #3c5d5d; font-weight: bold; }
+
+/* Name.Decorator */
+.ni { color: #800080; }
+
+/* Name.Entity */
+.ne { color: #990000; font-weight: bold; }
+
+/* Name.Exception */
+.nf { color: #990000; font-weight: bold; }
+
+/* Name.Function */
+.nl { color: #990000; font-weight: bold; }
+
+/* Name.Label */
+.nn { color: #555555; }
+
+/* Name.Namespace */
+.nt { color: #000080; }
+
+/* Name.Tag */
+.nv { color: #008080; }
+
+/* Name.Variable */
+.ow { color: #000000; font-weight: bold; }
+
+/* Operator.Word */
+.w { color: #bbbbbb; }
+
+/* Text.Whitespace */
+.mf { color: #009999; }
+
+/* Literal.Number.Float */
+.mh { color: #009999; }
+
+/* Literal.Number.Hex */
+.mi { color: #009999; }
+
+/* Literal.Number.Integer */
+.mo { color: #009999; }
+
+/* Literal.Number.Oct */
+.sb { color: #d01040; }
+
+/* Literal.String.Backtick */
+.sc { color: #d01040; }
+
+/* Literal.String.Char */
+.sd { color: #d01040; }
+
+/* Literal.String.Doc */
+.s2 { color: #d01040; }
+
+/* Literal.String.Double */
+.se { color: #d01040; }
+
+/* Literal.String.Escape */
+.sh { color: #d01040; }
+
+/* Literal.String.Heredoc */
+.si { color: #d01040; }
+
+/* Literal.String.Interpol */
+.sx { color: #d01040; }
+
+/* Literal.String.Other */
+.sr { color: #009926; }
+
+/* Literal.String.Regex */
+.s1 { color: #d01040; }
+
+/* Literal.String.Single */
+.ss { color: #990073; }
+
+/* Literal.String.Symbol */
+.bp { color: #999999; }
+
+/* Name.Builtin.Pseudo */
+.vc { color: #008080; }
+
+/* Name.Variable.Class */
+.vg { color: #008080; }
+
+/* Name.Variable.Global */
+.vi { color: #008080; }
+
+/* Name.Variable.Instance */
+.il { color: #009999; }
+
+/* Literal.Number.Integer.Long */
+.dark pre code { line-height: 1.5; }
+
+.dark pre code { background-color: #122024; }
+
+.dark pre code { color: #93a1a1; }
+
+.dark .hll { background-color: #002b36; }
+
+.dark .c { color: #586e75; font-style: italic; }
+
+/* Comment */
+.dark .err { color: #93a1a1; background-color: #e3d2d2; }
+
+/* Error */
+.dark .k { color: #859900; font-weight: bold; }
+
+/* Keyword */
+.dark .o { color: #859900; font-weight: bold; }
+
+/* Operator */
+.dark .cm { color: #586e75; font-style: italic; }
+
+/* Comment.Multiline */
+.dark .c1 { color: #586e75; font-style: italic; }
+
+/* Comment.Single */
+.dark .gd { color: #2aa198; background-color: #ffdddd; }
+
+/* Generic.Deleted */
+.dark .ge { color: #2aa198; font-style: italic; }
+
+/* Generic.Emph */
+.dark .gh { color: #cb4b16; }
+
+/* Generic.Heading */
+.dark .gi { color: #2aa198; background-color: #ddffdd; }
+
+/* Generic.Inserted */
+.dark .gu { color: #cb4b16; }
+
+/* Generic.Subheading */
+.dark .k { color: #859900; }
+
+.dark .kc { color: #cb4b16; font-weight: bold; }
+
+/* Keyword.Constant */
+.dark .kd { color: #2aa198; font-weight: bold; }
+
+/* Keyword.Declaration */
+.dark .kn { color: #2aa198; font-weight: bold; }
+
+/* Keyword.Namespace */
+.dark .kp { color: #2aa198; font-weight: bold; }
+
+/* Keyword.Pseudo */
+.dark .kr { color: #2aa198; font-weight: bold; }
+
+/* Keyword.Reserved */
+.dark .nb { color: #b58900; }
+
+/* Name.Builtin */
+.dark .no { color: #cb4b16; }
+
+/* Name.Constant */
+.dark .ni { color: #cb4b16; }
+
+/* Name.Entity */
+.dark .ne { color: #cb4b16; font-weight: bold; }
+
+/* Name.Exception */
+.dark .nf { color: #cb4b16; font-weight: bold; }
+
+/* Name.Function */
+.dark .nl { color: #cb4b16; font-weight: bold; }
+
+/* Name.Label */
+.dark .ow { color: #2aa198; font-weight: bold; }
+
+/* Operator.Word */
+.dark .sb { color: #586e75; }
+
+/* Literal.String.Backtick */
+.dark .sc { color: #586e75; }
+
+/* Literal.String.Char */
+.dark .sd { color: #586e75; }
+
+/* Literal.String.Doc */
+.dark .s2 { color: #586e75; }
+
+/* Literal.String.Double */
+.dark .se { color: #586e75; }
+
+/* Literal.String.Escape */
+.dark .sh { color: #586e75; }
+
+/* Literal.String.Heredoc */
+.dark .si { color: #586e75; }
+
+/* Literal.String.Interpol */
+.dark .sx { color: #586e75; }
+
+/* Literal.String.Other */
+
+/*# sourceMappingURL=main.css.map */

