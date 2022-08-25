@@ -10,5 +10,5 @@ permalink: /about/
 
 ### Contact
 
-* Mail: joeyzzz@qq.com
+* Mail: joey7orz@gmail.com
 * Github: https://github.com/JoeyZzZzZz
