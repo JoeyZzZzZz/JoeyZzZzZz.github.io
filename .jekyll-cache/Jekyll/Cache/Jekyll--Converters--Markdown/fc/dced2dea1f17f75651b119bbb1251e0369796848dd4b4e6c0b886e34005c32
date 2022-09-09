@@ -1,0 +1,399 @@
+I"�O<h1 id="前言">前言</h1>
+
+<p>第一次分析EPS类漏洞，对于PostScript格式十分陌生，通过查阅<a href="https://www.adobe.com/content/dam/acom/en/devnet/actionscript/articles/PLRM.pdf">PostScript LANGUAGE REFERENCE</a>了解PostScript格式。调试EXP来自kcufld师傅的<a href="https://github.com/kcufId/eps-CVE-2017-0261">eps-CVE-2017-0261</a>，EXP在Office 2007可以正常运行，但在Office 2010以上版本需要配合提权漏洞逃逸沙箱后完成利用。<!--more--></p>
+
+<h2 id="调试环境">调试环境</h2>
+
+<p>调试是直接使用kcufld师傅的eps加载器进行调试，EPSIMP32.FLT版本信息如下：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>OS:			Win7 x64 SP1
+Office:		    	Ofiice 2007 x86
+Image name: 		EPSIMP32.FLT
+ImageSize:        	0x0006E000
+File version:     	2006.1200.4518.1014
+Product version:  	2006.1200.4518.0
+</code></pre></div></div>
+
+<h1 id="漏洞分析">漏洞分析</h1>
+
+<h2 id="postscript格式简介">PostScript格式简介</h2>
+
+<p>先介绍下PostScript基本的数据结构：</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>SIMPLE OBJECTS</th>
+      <th>COMPOSITE OBJECTS</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>boolean</td>
+      <td>array</td>
+    </tr>
+    <tr>
+      <td>fontID</td>
+      <td>dictionary</td>
+    </tr>
+    <tr>
+      <td>integer</td>
+      <td>file</td>
+    </tr>
+    <tr>
+      <td>mark</td>
+      <td>gstate (LanguageLevel 2)</td>
+    </tr>
+    <tr>
+      <td>name</td>
+      <td>packedarray (LanguageLevel 2)</td>
+    </tr>
+    <tr>
+      <td>null</td>
+      <td>save</td>
+    </tr>
+    <tr>
+      <td>operator</td>
+      <td>string</td>
+    </tr>
+    <tr>
+      <td>real</td>
+      <td> </td>
+    </tr>
+  </tbody>
+</table>
+
+<p>左侧为简单对象，右侧为复合对象。简单对象都是原子实体，类型、属性和值不可逆转地结合在一起，不能改变。但复合对象的值与对象本身是分开的，对象本身存储于操作栈中，具体的结构如下：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>// PostScript Object
+struct PostScript object
+{
+    dword    type;		//对象类型		
+    dword    attr;		
+    dword    value1;	//指向对象所属变量名称
+    dword    value2;	//若为简单对象，直接指向值；若为复合对象，指向存储的值的结构
+}ps_obj;
+</code></pre></div></div>
+
+<p>其中部分type的值与类型的映射如下：</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>type值</th>
+      <th>数据类型</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>0x0</td>
+      <td>nulltype</td>
+    </tr>
+    <tr>
+      <td>0x3</td>
+      <td>integertype</td>
+    </tr>
+    <tr>
+      <td>0x5</td>
+      <td>realtype</td>
+    </tr>
+    <tr>
+      <td>0x8</td>
+      <td>booleantype</td>
+    </tr>
+    <tr>
+      <td>0x10</td>
+      <td>operatortype</td>
+    </tr>
+    <tr>
+      <td>0x20</td>
+      <td>marktype</td>
+    </tr>
+    <tr>
+      <td>0x40</td>
+      <td>savetype</td>
+    </tr>
+    <tr>
+      <td>0x300</td>
+      <td>nametype</td>
+    </tr>
+    <tr>
+      <td>0x500</td>
+      <td>stringtype</td>
+    </tr>
+    <tr>
+      <td>0x900</td>
+      <td>filetype</td>
+    </tr>
+    <tr>
+      <td>0x30000</td>
+      <td>arraytype</td>
+    </tr>
+    <tr>
+      <td>0x70000</td>
+      <td>packedarraytype</td>
+    </tr>
+    <tr>
+      <td>0x0B0000</td>
+      <td>packedarraytype</td>
+    </tr>
+    <tr>
+      <td>0x110000</td>
+      <td>dicttype</td>
+    </tr>
+    <tr>
+      <td>0x210000</td>
+      <td>gstatetype</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>接着介绍下漏洞中使用到的比较关键的操作符的意义：</p>
+
+<table>
+  <thead>
+    <tr>
+      <th style="text-align: left">操作符</th>
+      <th style="text-align: left">示例</th>
+      <th style="text-align: left">解析</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="text-align: left">forall</td>
+      <td style="text-align: left">array  proc  forall</td>
+      <td style="text-align: left">枚举第一个操作数的元素，为每个元素执行过程 proc。如果第一个操作数是数组、压缩数组或字符串对象，则 forall 将一个元素压入操作数堆栈，并对对象中的每个元素执行 proc，从索引为 0 的元素开始并依次执行。</td>
+    </tr>
+    <tr>
+      <td style="text-align: left">dup</td>
+      <td style="text-align: left">any  dup —&gt; any  any</td>
+      <td style="text-align: left">复制操作数堆栈上的顶部元素。 dup 只复制对象；复合对象的值不是复制而是共享的。</td>
+    </tr>
+    <tr>
+      <td style="text-align: left">putinterval</td>
+      <td style="text-align: left">array1  index  array2  putinterval</td>
+      <td style="text-align: left">用第三个操作数的全部内容替换第一个操作数的元素的子序列。被替换的子序列从第一个操作数的 index 开始；它的长度与第三个操作数的长度相同。</td>
+    </tr>
+    <tr>
+      <td style="text-align: left">put/get</td>
+      <td style="text-align: left">array  index  any  put/get</td>
+      <td style="text-align: left">替换/获取第一个操作数的一个元素的值。如果第一个操作数是一个数组或一个字符串，put/get将第二个操作数视为一个索引，并将第三个操作数存储在索引所确定的位置，从0开始计算。</td>
+    </tr>
+    <tr>
+      <td style="text-align: left">save</td>
+      <td style="text-align: left">/save save</td>
+      <td style="text-align: left">保存当前VM状态快照，一个快照只能使用一次。</td>
+    </tr>
+    <tr>
+      <td style="text-align: left">restore</td>
+      <td style="text-align: left">save restore</td>
+      <td style="text-align: left">丢弃本地VM中自相应保存以来创建的所有对象，并回收它们占用的内存；将本地VM中所有复合对象的值（字符串除外）重置为保存时的状态；关闭自相应保存以来打开的文件，只要这些文件在local VM 分配模式有效时打开。</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>了解了上述背景后，开始分析漏洞。</p>
+
+<h2 id="漏洞成因">漏洞成因</h2>
+
+<p>通过使用forall操作符获取创建的字符串对象，并在第一次循环时使用restore操作符释放字符串对象，随后创建新的字符串对象使得原本存储旧字符串对象的结构被新复合对象代替。若故意构造大小为0x27的字符串对象，则字符串被释放后会多出0x28的内存空间，此时立即创建新的字符串对象，则该内存会用来存储指向新字符串的string结构。随后通过改变forall的函数，获取指向新字符串的结构。</p>
+
+<p>漏洞文件中一共触发了三次漏洞，第一次是获取了被释放的string的字符用于判断系统是32位还是64位。第二次触发故意构造大小为0x27的string对象，用于获取指向恶意string的结构。第三次则利用第二次构造的特殊string结构创造了一个起始地址为0x00000000，大小为0x7fffffff的字符串，构造了能够读写任意地址内存的读写原语。接着利用读写原语搜索内存中函数地址构造ROP链。最终创建了一个文件对象，在调用closefile操作符时跳转执行ROP完成漏洞利用。</p>
+
+<p>查看poc.eps文件，第一次调用forall如图所示：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210903105452944.png" alt="image-20210903105452944" /></p>
+
+<p>在ida中定位到forall操作符的代码：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210902173157063.png" alt="image-20210902173157063" /></p>
+
+<p>使用windbg找到对应偏移后下断：<code class="language-plaintext highlighter-rouge">sxe ld EPSIMP32;g;bp EPSIMP32+2b928;g;</code></p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210831150138806.png" alt="image-20210831150138806" /></p>
+
+<p>运行到图中所示位置时查看edi的值，指向了操作栈，查看后发现有两个对象在栈中，第一个为string l63，第二个为array l61</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210910180510699.png" alt="image-20210910180510699" /></p>
+
+<p>继续分析，会获取l63和l61对象到栈中，并确认l63的类型为string后，跳转到获取string类型元素部分</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210831161042602.png" alt="image-20210831161042602" /></p>
+
+<p>获取值的过程会因为type的不同而有所变化，具体如图所示：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210901172253284.png" alt="image-20210901172253284" /></p>
+
+<p>通过调试可以更加直观的看到通过value2获取string的方式：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210831171553055.png" alt="image-20210831171553055" /></p>
+
+<p>接着循环获取string中的每一个元素并执行函数：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210831192324185.png" alt="image-20210831192324185" /></p>
+
+<p>此时传入deferred_exec的参数为eax，查看传入参数：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:000&gt; bp EPSIMP32+2ba06          //call    deferred_exec
+0:000&gt; g
+Breakpoint 1 hit
+eax=0018fd78 ebx=00000000 ecx=00291280 edx=00000001 esi=00425770 edi=00000000
+eip=718fba06 esp=0018fd54 ebp=0018fdbc iopl=0         nv up ei pl nz na po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000202
+EPSIMP32!RegisterPercentCallback+0x4604:
+718fba06 e8d8abffff      call    deferred_exec (718f65e3)
+0:000&gt; dd eax L4        //查看传入的参数为数组
+0018fd78  00030000 00000000 0049ea98 0048f40c
+0:000&gt; dd poi(poi(poi(poi(poi( 0018fd78 +c))+24))+28)   //查看数组中存储的内容
+0049e2c0  00000500 00000100 00495408 0048ee98			//数组中存放着字符串对象
+0049e2d0  12d85688 8000f194 00000020 00000100
+0049e2e0  0049dc40 0048f198 12d8568f 80000000
+0049e2f0  00490023 000007c8 00000300 00000100
+0049e300  12d856b2 8000f19c 00000026 00000100
+0049e310  0049dc60 0048f1a0 12d856b1 80000100
+0049e320  00420029 0048f1a4 00000003 00000000
+0049e330  12d856b4 80000080 0000002c 00000100
+0:000&gt; db poi(poi(poi(poi(poi( 0049e2c0 +c))+24))+20) L10   //查看字符串的内容为l56 cvx exec
+00495940  20 6c 35 36 20 63 76 78-20 65 78 65 63 20 00 00   l56 cvx exec ..
+0:000&gt; g        //第二次执行deferred_exec
+(5c8.144): C++ EH exception - code e06d7363 (first chance)
+(5c8.144): C++ EH exception - code e06d7363 (first chance)
+Breakpoint 1 hit
+eax=0018fd78 ebx=00000000 ecx=00291280 edx=00000003 esi=00425770 edi=00000001
+eip=718fba06 esp=0018fd54 ebp=0018fdbc iopl=0         nv up ei pl nz na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000206
+EPSIMP32!RegisterPercentCallback+0x4604:
+718fba06 e8d8abffff      call    EPSIMP32+0x265e3 (718f65e3)
+0:000&gt; dd poi(poi(poi(poi(poi( 0018fd78 +c))+24))+28)   //查看数组的内容
+0049e2c0  00000500 00000100 00495438 0048eeac			//数组中存放着字符串对象
+0049e2d0  12d85688 8000f194 00000020 00000100
+0049e2e0  0049dc40 0048f198 12d8568f 80000000
+0049e2f0  00490023 000007c8 00000300 00000100
+0049e300  12d856b2 8000f19c 00000026 00000100
+0049e310  0049dc60 0048f1a0 12d856b1 80000100
+0049e320  00420029 0048f1a4 00000003 00000000
+0049e330  12d856b4 80000080 0000002c 00000100
+0:000&gt; db poi(poi(poi(poi(poi( 0049e2c0 +c))+24))+20) L10   //查看字符串的内容为l53 cvx exec
+00495958  20 6c 35 33 20 63 76 78-20 65 78 65 63 20 00 00   l53 cvx exec ..
+</code></pre></div></div>
+
+<p>从调试的结果可以得知，该函数执行的正是forall。在第一次执行时，l61中待执行的命令是<code class="language-plaintext highlighter-rouge">l56 cvx exec</code>，在第二次执行时，l61中的内容已经被换成了<code class="language-plaintext highlighter-rouge">l53 cvx exec</code>与调试结果相符。</p>
+
+<p>接着深入函数分析，发现函数内部嵌套了deferred_exec：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210901193647205.png" alt="image-20210901193647205" /></p>
+
+<p>于是重新调试，下断在此，分析参数：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210901201303745.png" alt="image-20210901201303745" /></p>
+
+<p>虽然type为0x10的操作符对象存储在Systemdict中无法查看，但是通过其他字符和数字还是能够确定该语句就是l50。当执行该语句后，原本l63指向的string结构将被替换成存放l52内容的string结构：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210901211439785.png" alt="image-20210901211439785" /></p>
+
+<p>可以看到此时原本存放l63的string结构已经变成了l52。</p>
+
+<p>在get函数下断，跳转到forall下的<code class="language-plaintext highlighter-rouge">/l64 l57 56 get def</code>语句查看l57的值：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210903144034585.png" alt="image-20210903144034585" /></p>
+
+<p>可以证实l57中存放的就是从l63中获取到的字符，该forall的作用就是泄露被释放的string结构指向的字符串。</p>
+
+<p>接着获取l57中的值，并进行一些处理，通过ifelse判断系统位数，若l77等于l52的长度+1，那么l99的值为1代表系统为64位，否则l99为0，代表系统为32位：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210903164816672.png" alt="image-20210903164816672" /></p>
+
+<p>可以看到在32位的调试环境下，l77的值为0，因此会将5个0压入操作栈中，并赋值给l95到l99：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210903165138520.png" alt="image-20210903165138520" /></p>
+
+<p>至此，漏洞原理部分分析完毕，接下来分析漏洞利用部分。</p>
+
+<h1 id="漏洞利用">漏洞利用</h1>
+
+<p>第二次执行forall代码如下：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210903171728048.png" alt="image-20210903171728048" /></p>
+
+<p>和第一次执行十分类似，因此就不深入分析。查看执行完forall后stringl63的变化：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210904155018524.png" alt="image-20210904155018524" /></p>
+
+<p>查看l63中的值，发现是一个string结构，于是查看字符串，内容正是l102中存储的l36的字符串</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210904155250267.png" alt="image-20210904155250267" /></p>
+
+<p>接着通过<code class="language-plaintext highlighter-rouge">l90 0 l92 putinterval</code>将l63中指向的第一个4字节的内容改为0x02b14ad4，该值指向l36中四字节之后的内容</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210904161420028.png" alt="image-20210904161420028" /></p>
+
+<p>经过多次修改，字符串修改为如下状态，修改的值会在第三次漏洞触发时使用到：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210907120914829.png" alt="image-20210907120914829" /></p>
+
+<p>接着查看l137获取的是l63中0x4处的值，l138获取的是l63中0x20处的值，l103的值为1</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210904170623340.png" alt="image-20210904170623340" /></p>
+
+<p>第二次漏洞触发部分分析完毕，接下分析第三次漏洞触发构造读写原语的部分。</p>
+
+<h2 id="构造读写原语">构造读写原语</h2>
+
+<p>l142中存储的是将l138放入到l193的0x24位置的后的字符串：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210904185419955.png" alt="image-20210904185419955" /></p>
+
+<p>接着使用forall操作符遍历l63数组，当遍历到第54个元素时，恢复快照。此时array l63被释放，接着复制 l142字符串，使得array l63对象被l142字符串对象覆盖：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210906105724780.png" alt="image-20210906105724780" /></p>
+
+<p>此时查看被覆盖后的l63中最后一次会被获取的值：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210906111515943.png" alt="image-20210906111515943" /></p>
+
+<p>说明最后一次会获取一个array对象，继续深入查看该对象发现存储了一个字符串，该字符串起始地址为0x00000000，大小为0x7fffffff：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210906112556232.png" alt="image-20210906112556232" /></p>
+
+<p>通过该字符串，可读写内存中0x00000000-0x7fffffff的任意地址，实现了读写原语的构造，最终将字符串对象存储在l201中。</p>
+
+<h2 id="构建rop链">构建ROP链</h2>
+
+<p>通过字符串l201获取EPSIMP32的基地址为：0x74750000，并存入l314中：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210906151059868.png" alt="image-20210906151059868" /></p>
+
+<p>接着通过EPSIMP32的导入表获取kernel32.dll的基地址并存放于l315中：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210906162228059.png" alt="image-20210906162228059" /></p>
+
+<p>随后开始利用读写原语搜索内存中的gadget用于构造ROP链：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210906164333935.png" alt="image-20210906164333935" /></p>
+
+<p>将构造好的ROP链放入伪造的文件对象中，并将对象放置在l159的2号元素中，将恶意pe文件和shellcode组成的字符串放置在l159的3号元素中：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210906200817931.png" alt="image-20210906200817931" /></p>
+
+<p>最终调用closefile操作符关闭伪造的文件对象，在关闭过程中会执行<code class="language-plaintext highlighter-rouge">call [eax+8]</code>使得跳转到构造好的ROP链中：</p>
+
+<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/image-20210906201456526.png" alt="image-20210906201456526" /></p>
+
+<p>至此，整个漏洞的原理和利用分析完毕，剩下的行为部分不再分析。</p>
+
+<h1 id="总结">总结</h1>
+
+<p>该样本漏洞利用的十分巧妙，通过UAF将原本正常的数组对象替换为指向构造好的能够读写任意内存的字符串对象。通过字符串对象实现了读写任意内存并构造ROP链的目的，并最终将构造好的ROP字符串对象修改为文件对象，利用cloasefile操作符跳转到ROP链中。</p>
+
+<p>尽管微软已经关闭了Office对于EPS文件的支持，但该格式文件仍然能被Adobe Illustrator打开，如果深入研究该类型文件可能仍有出现漏洞的可能。</p>
+
+<h1 id="参考链接">参考链接</h1>
+
+<p>[1] <a href="https://www.adobe.com/content/dam/acom/en/devnet/actionscript/articles/PLRM.pdf">PostScript LANGUAGE REFERENCE</a></p>
+
+<p>[2] <a href="https://github.com/kcufId/eps-CVE-2017-0261">eps-CVE-2017-0261</a></p>
+
+<p>[3] <a href="https://bbs.pediy.com/thread-261442.htm">CVE-2017-0261及利用样本分析</a></p>
+
+<p>[4] <a href="https://www.fireeye.com/blog/threat-research/2017/05/eps-processing-zero-days.html">EPS Processing Zero-Days Exploited by Multiple Threat Actors</a></p>
+:ET

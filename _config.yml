@@ -1,30 +1,35 @@
 # Site settings
-title: Joey #website title
-description: > # this means to ignore newlines until "baseurl:"
-url: https://joeyzzzzzz.github.io/
-baseurl: # the sub-path of your site, e.g. /blog/
+title:          Joey
+description:    "Minimal Jekyll theme for storytellers"
+url:            "https://chesterhow.github.io"
 
-disqus_shortname:  # leave empty if you don't want comments
-google_analytics: false #if set to "true" modify the google_analytycs.html, set to false otherwise
-
-# Links settings
-links:
-  - name:         Home
-    url:          
-  - name:         About
-    url:          /about
-    external:     false
-  - name:         Archive
-    url:          /archive
-    external:     false
-    external:     false
-  - name:         GitHub
-    url:          https://github.com/JoeyZzZzZz/
-    external:     true
+# Author
+author:
+  name:         Chester How
+  url:          https://chester.how
+  email:        chesterhow@gmail.com
 
 # Build settings
-markdown: kramdown
-markdown_ext:  markdown,mkdown,mkdn,mkd,md
+markdown:       kramdown
+include:
+  - _pages
 
-redcarpet:
-  extensions: ["tables", "autolink", "strikethrough", "space_after_headers", "fenced_code_blocks"]
+# Assets
+sass:
+  sass_dir:     _sass
+  style:        compressed
+
+# Gems
+plugins:
+  - jekyll-feed
+  - jekyll-paginate
+  - jekyll-seo-tag
+  # - jemoji #Uncomment this to allow emoji in your post
+
+# Permalinks
+permalink:      /:year-:month-:day/:title
+paginate:       5
+
+# Excludes
+exclude: [ Gemfile, Gemfile.lock, tale.gemspec ]
+

