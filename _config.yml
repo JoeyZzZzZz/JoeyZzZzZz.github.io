@@ -1,13 +1,7 @@
 # Site settings
 title:          Joey
-description:    "Minimal Jekyll theme for storytellers"
-url:            "https://chesterhow.github.io"
-
-# Author
-author:
-  name:         Chester How
-  url:          https://chester.how
-  email:        chesterhow@gmail.com
+description:    "Joey's blog"
+url:            "https://joeyzzzzzz.github.io/"
 
 # Build settings
 markdown:       kramdown
