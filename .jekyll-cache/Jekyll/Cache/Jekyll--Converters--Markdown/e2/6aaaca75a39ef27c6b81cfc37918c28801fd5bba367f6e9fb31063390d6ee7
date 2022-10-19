@@ -1,4 +1,0 @@
-I"�<h1 id="前言">前言</h1>
-
-<p>第一次分析EPS类漏洞，对于PostScript格式十分陌生，通过查阅<a href="https://www.adobe.com/content/dam/acom/en/devnet/actionscript/articles/PLRM.pdf">PostScript LANGUAGE REFERENCE</a>了解PostScript格式。调试EXP来自kcufld师傅的<a href="https://github.com/kcufId/eps-CVE-2017-0261">eps-CVE-2017-0261</a>，EXP在Office 2007可以正常运行，但在Office 2010以上版本需要配合提权漏洞逃逸沙箱后完成利用。</p>
-:ET
