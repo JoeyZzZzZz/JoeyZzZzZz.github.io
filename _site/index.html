@@ -74,6 +74,74 @@
   
     
   
+    
+  
+    
+  
+    
+  
+    
+  
+
+  
+    <a href="/2023-05-26/CVE-2021-44706" class="catalogue-item">
+  <div>
+    
+    <time datetime="2023-05-26 00:00:00 +0800" class="catalogue-time">May 26, 2023</time>
+    <h1 class="catalogue-title">CVE-2021-44706 Adobe Reader UAF漏洞分析与利用</h1>
+    <div class="catalogue-line"></div>
+
+    <p>
+      
+        漏洞简介
+
+该漏洞也是2021年天府杯中出现的Adobe Reader漏洞，由@bee13oy发现并利用。漏洞位于EScript.api模块，对应的Adobe Reader版本为：21.007.20099。
+
+      
+    </p>
+
+  </div>
+</a>
+
+  
+    <a href="/2022-11-24/CVE-2021-44704" class="catalogue-item">
+  <div>
+    
+    <time datetime="2022-11-24 00:00:00 +0800" class="catalogue-time">November 24, 2022</time>
+    <h1 class="catalogue-title">CVE-2021-44704 Adobe Reader UAF漏洞分析与利用</h1>
+    <div class="catalogue-line"></div>
+
+    <p>
+      
+        前言
+
+该漏洞为2021年天府杯中使用的Adobe Reader UAF漏洞，漏洞位于Annots.api模块，对应的Adobe Reader版本为：21.007.20099。
+
+      
+    </p>
+
+  </div>
+</a>
+
+  
+    <a href="/2022-11-04/CVE-2021-44707" class="catalogue-item">
+  <div>
+    
+    <time datetime="2022-11-04 00:00:00 +0800" class="catalogue-time">November 04, 2022</time>
+    <h1 class="catalogue-title">CVE-2021-44707 Adobe Reader越界写漏洞分析与利用</h1>
+    <div class="catalogue-line"></div>
+
+    <p>
+      
+        漏洞概述
+
+该漏洞为2021年天府杯中使用的Adobe Reader越界写漏洞，漏洞位于字体解析模块：CoolType.dll中，对应的Adobe Reader版本为：21.007.20099。
+
+      
+    </p>
+
+  </div>
+</a>
 
   
     <a href="/2022-09-09/CVE-2021-44711" class="catalogue-item">
@@ -96,84 +164,18 @@
 </a>
 
   
-    <a href="/2022-06-10/CVE-2022-30190" class="catalogue-item">
+    <a href="/2022-06-24/CVE-2018-8460" class="catalogue-item">
   <div>
     
-    <time datetime="2022-06-10 00:00:00 +0800" class="catalogue-time">June 10, 2022</time>
-    <h1 class="catalogue-title">微软MSDT远程代码执行漏洞 CVE-2022-30190 分析</h1>
+    <time datetime="2022-06-24 00:00:00 +0800" class="catalogue-time">June 24, 2022</time>
+    <h1 class="catalogue-title">CVE-2018-8460 IE 漏洞利用</h1>
     <div class="catalogue-line"></div>
 
     <p>
       
         前言
 
-在分析漏洞的过程中，陆陆续续看到许多师傅的分析文章，于是参考之后结合自己的分析总结了一下。
-
-      
-    </p>
-
-  </div>
-</a>
-
-  
-    <a href="/2022-02-18/CVE-2021-26411" class="catalogue-item">
-  <div>
-    
-    <time datetime="2022-02-18 00:00:00 +0800" class="catalogue-time">February 18, 2022</time>
-    <h1 class="catalogue-title">CVE-2021-26411漏洞分析</h1>
-    <div class="catalogue-line"></div>
-
-    <p>
-      
-        漏洞信息
-
-CVE：CVE-2021-26411
-
-IE版本：IE 9-11
-
-漏洞类型：Double free
-
-漏洞模块：MSHTML.dll
-
-      
-    </p>
-
-  </div>
-</a>
-
-  
-    <a href="/2021-11-19/CVE-2015-2545" class="catalogue-item">
-  <div>
-    
-    <time datetime="2021-11-19 00:00:00 +0800" class="catalogue-time">November 19, 2021</time>
-    <h1 class="catalogue-title">CVE-2015-2545 EMET Bypass分析</h1>
-    <div class="catalogue-line"></div>
-
-    <p>
-      
-        前言
-
-该漏洞和上次分析的CVE-2017-0261为同一类型，同样是EPS文件解析产生的UAF漏洞，因此在分析时就不再讲解EPS的语法和相关结构了。分析该漏洞是因为样本能够完全绕过EMET，故此深入分析下绕过的原理并改造CVE-2017-0261绕过EMET。
-
-      
-    </p>
-
-  </div>
-</a>
-
-  
-    <a href="/2021-09-07/CVE-2017-0261" class="catalogue-item">
-  <div>
-    
-    <time datetime="2021-09-07 00:00:00 +0800" class="catalogue-time">September 07, 2021</time>
-    <h1 class="catalogue-title">CVE-2017-0261 EPS文件解析漏洞分析</h1>
-    <div class="catalogue-line"></div>
-
-    <p>
-      
-        前言
-
-第一次分析EPS类漏洞，对于PostScript格式十分陌生，通过查阅PostScript LANGUAGE REFERENCE了解PostScript格式。调试EXP来自kcufld师傅的eps-CVE-2017-0261，EXP在Office 2007可以正常运行，但在Office 2010以上版本需要配合提权漏洞逃逸沙箱后完成利用。
+分析该漏洞的原因是看到ZDI的这篇分析文章：CVE-2018-8460: EXPOSING A DOUBLE FREE IN INTERNET EXPLORER FOR CODE EXECUTION。里面详细分析了该漏洞的原理和利用思路，但是没有EXP，因此想尝试自己写出EXP。虽然最终没有成功写出EXP，但还是把学习的过程记录了下来，作为一个积累。
 
       
     </p>
