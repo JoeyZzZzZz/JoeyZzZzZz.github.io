@@ -1,4 +1,0 @@
-I"<h1 id="前言">前言</h1>
-
-<p>分析该漏洞的原因是看到ZDI的这篇分析文章：<a href="https://www.thezdi.com/blog/2018/10/18/cve-2018-8460-exposing-a-double-free-in-internet-explorer-for-code-execution">CVE-2018-8460: EXPOSING A DOUBLE FREE IN INTERNET EXPLORER FOR CODE EXECUTION</a>。里面详细分析了该漏洞的原理和利用思路，但是没有EXP，因此想尝试自己写出EXP。虽然最终没有成功写出EXP，但还是把学习的过程记录了下来，作为一个积累。</p>
-:ET

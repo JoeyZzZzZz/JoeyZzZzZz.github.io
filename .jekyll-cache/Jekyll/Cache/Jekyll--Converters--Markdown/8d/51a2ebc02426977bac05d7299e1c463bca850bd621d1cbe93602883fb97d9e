@@ -1,4 +1,0 @@
-I"B<h1 id="漏洞简介">漏洞简介</h1>
-
-<p>该漏洞也是2021年天府杯中出现的Adobe Reader漏洞，由<a href="https://twitter.com/bee13oy">@bee13oy</a>发现并利用。漏洞位于<code class="language-plaintext highlighter-rouge">EScript.api</code>模块，对应的Adobe Reader版本为：21.007.20099。</p>
-:ET

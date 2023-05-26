@@ -1,4 +1,0 @@
-I"�<h1 id="前言">前言</h1>
-
-<p>该漏洞为2021年天府杯中使用的Adobe Reader UAF漏洞，漏洞位于<code class="language-plaintext highlighter-rouge">Annots.api</code>模块，对应的Adobe Reader版本为：21.007.20099。</p>
-:ET

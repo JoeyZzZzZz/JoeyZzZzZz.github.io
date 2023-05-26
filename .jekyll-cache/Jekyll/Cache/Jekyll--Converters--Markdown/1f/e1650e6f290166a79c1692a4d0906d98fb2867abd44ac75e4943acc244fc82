@@ -1,4 +1,0 @@
-I"N<h1 id="前言">前言</h1>
-
-<p>本文在FireEye的研究<a href="https://www.fireeye.com/blog/threat-research/2019/06/hunting-com-objects.html">Hunting COM Objects[1]</a>的基础上，讲述COM对象在IE漏洞、shellcode和Office宏中的利用方式以及如何挖掘可利用的COM对象，获取新的漏洞利用方式。</p>
-:ET
